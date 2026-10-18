@@ -1,21 +1,22 @@
 from function import (add_user, view_users, search_user, update_user, delete_user,add_waste,
-    view_waste,search_waste,update_waste,delete_waste)
+    view_waste,search_waste,update_waste,delete_waste,add_city, view_cities,search_cities,update_city, delete_city, add_area,view_areas,search_area,update_area,delete_area )
 print("      ♻️  BinGO",       "\nSmart Waste Management System")
 while True:
     print("\n1. User Management")
     print("2. Waste Management")
-    print("3. City & Area Management")
-    print("4. Service Provider Management")
-    print("5. Location-Based Service Availability")
-    print("6. Smart Provider Matching")
-    print("7. Collection Management")
-    print("8. Scheduling")
-    print("9. Request Management")
-    print("10. Billing")
-    print("11. Dashboard & A2nalytics")
-    print("12. Reports")
-    print("13. Exit")
-    choice = input("\nEnter your choice (1-13): ")
+    print("3. City Management")
+    print("4. Area Management")
+    print("5. Service Provider Management")
+    print("6. Location-Based Service Availability")
+    print("7. Smart Provider Matching")
+    print("8. Collection Management")
+    print("9. Scheduling")
+    print("10. Request Management")
+    print("11. Billing")
+    print("12. Dashboard & Analytics")
+    print("13. Reports")
+    print("14. Exit")
+    choice = input("\nEnter your choice (1-14): ")
     if choice == "1":
        while True:
         print("\n User Management ")
@@ -64,26 +65,72 @@ while True:
                 break
             else:
                print("Invalid choice! Please try again.")
-
-    elif choice == "4":
-        print("Service Provider Management selected")
+    elif choice == "3":
+        while True:
+            print("\n City & Area Management ")
+            print("1. Add City")
+            print("2. View Cities")
+            print("3. Search City")
+            print("4. update city")
+            print("5. Delete City")
+            print("6. Back to Main Menu")
+            city_choice = input("Enter your choice: ")
+            if city_choice == "1":
+               add_city()
+            elif city_choice == "2":
+               view_cities()
+            elif city_choice == "3":
+               search_cities()
+            elif city_choice == "4":
+                update_city()
+            elif city_choice == "5":
+                delete_city()
+            elif city_choice == "6":
+                break
+            else:
+                print("Invalid choice! Please try again.")
+    elif choice =="4":
+        while True:
+            print("1. Add Area ")
+            print("2. View Areas")
+            print("3. Search Area")
+            print("4. Update Area")
+            print("5. Delete area")
+            print("6. Back to Main Menu")
+            city_choice = input("Enter your choice: ")
+            if city_choice == "1":
+                add_area()
+            elif city_choice == "2":
+                view_areas()
+            elif city_choice == "3":
+               search_area()
+            elif city_choice == "4":   
+               update_area()
+            elif city_choice == "5":      
+               delete_area()   
+            elif city_choice == "6":
+                break
+            else:
+                print("Invalid choice! Please try again.")            
     elif choice == "5":
-        print("Location Based Service Availability selected")
+        print("Service Provider Management selected")
     elif choice == "6":
-        print("Smart Provider Matching selected ")
+        print("Location Based Service Availability selected")
     elif choice == "7":
-        print("Collection Management selected")
+        print("Smart Provider Matching selected ")
     elif choice == "8":
-        print("Scheduling selected")
+        print("Collection Management selected")
     elif choice == "9":
-        print("Request Management selected")
+        print("Scheduling selected")
     elif choice == "10":
-        print("Billing selected!")
+        print("Request Management selected")
     elif choice == "11":
-        print("Dashboard & Analytics selected")
+        print("Billing selected!")
     elif choice == "12":
-        print("Reports selected!")
+        print("Dashboard & Analytics selected")
     elif choice == "13":
+        print("Reports selected!")
+    elif choice == "14":
         print("\nThank you for using BinGO! ♻️")
         break
     else:

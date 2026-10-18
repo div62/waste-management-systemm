@@ -141,3 +141,138 @@ def delete_waste():
                 print("Deletion cancelled.")
             return
     print("Waste type not found!")    
+
+cities = []
+def add_city():
+    print("\n Add City ")
+    city_id = input("Enter City ID: ")
+    for city in cities:
+        if city["id"] == city_id:
+            print("Error: City ID already exists!")
+            return
+    name = input("Enter City Name: ")
+    state = input("Enter State Name: ")
+    city = {
+        "id": city_id,
+        "name": name,
+        "state": state
+    }
+    cities.append(city)
+    print("\nCity added successfully!")
+def view_cities():
+    print("\n Registered Cities ")
+    if not cities:
+        print("No cities registered yet.")
+        return
+    for city in cities:
+        print("City ID:", city["id"])
+        print("City Name:", city["name"])
+        print("State:", city["state\n"])  
+def search_cities():
+    print("\n Search City ")
+    city_id = input("Enter City ID to search: ")
+    for city in cities:
+        if city["id"] == city_id:
+            print("\nCity Found!")
+            print("City ID:", city["id"])
+            print("City Name:", city["name"])
+            print("State:", city["state"])
+            return
+    print("City not found!")   
+def update_city():
+    print("\n Update City ")
+    city_id = input("Enter City ID to update: ")
+    for city in cities:
+        if city["id"] == city_id:
+            name = input(f"Enter new city name [{city['name']}]: ")
+            state = input(f"Enter new state name [{city['state']}]: ")
+            if name:
+                city["name"] = name
+            if state:
+                city["state"] = state
+            print("\nCity updated successfully!")
+            return
+    print("City not found!")
+def delete_city():
+    print("\n Delete City ")
+    city_id = input("Enter City ID to delete: ")
+    for city in cities:
+        if city["id"] == city_id:
+            confirm = input(
+                f"Delete city {city['name']}? (yes/no): "
+            )
+            if confirm.lower() == "yes":
+                cities.remove(city)
+                print("\nCity deleted successfully!")
+            else:
+                print("Deletion cancelled.")
+            return
+    print("City not found!")
+
+areas = []    
+def add_area():
+    print("\n Add Area ")
+    area_id = input("Enter Area ID: ")
+    for area in areas:
+        if area["id"] == area_id:
+            print("Error: Area ID already exists!")
+            return
+    name = input("Enter Area Name: ")
+    city_id = input("Enter City ID: ")
+    area = {
+        "id": area_id,
+        "name": name,
+        "city_id": city_id
+    }
+    areas.append(area)
+    print("\nArea added successfully!")
+def view_areas():
+    print("\n Registered Areas ")
+    if not areas:
+        print("No areas registered yet.")
+        return
+    for area in areas:
+        print("Area ID:", area["id"])
+        print("Area Name:", area["name"])
+        print("City ID:", area["city_id"]) 
+def search_area():
+    print("\n  Search Area  ")
+    area_id = input("Enter Area ID to search: ")
+    for area in areas:
+        if area["id"] == area_id:
+            print("\nArea Found!")
+            print("Area ID:", area["id"])
+            print("Area Name:", area["name"])
+            print("City ID:", area["city_id"])
+            return
+    print("Area not found!")  
+def update_area():
+    print("\n  Update Area  ")
+    area_id = input("Enter Area ID to update: ")
+    for area in areas:
+        if area["id"] == area_id:
+            print("Leave a field blank to keep its current value.")
+            name = input(f"Enter new area name [{area['name']}]: ")
+            city_id = input(f"Enter new City ID [{area['city_id']}]: ")
+            if name:
+                area["name"] = name
+            if city_id:
+                area["city_id"] = city_id
+            print("\nArea updated successfully!")
+            return
+    print("Area not found!")   
+def delete_area():
+    print("\n Delete Area ")
+    area_id = input("Enter Area ID to delete: ")
+    for area in areas:
+        if area["id"] == area_id:
+            confirm = input(
+                f"Delete area {area['name']}? (yes/no): "
+            )
+            if confirm.lower() == "yes":
+                areas.remove(area)
+                print("\nArea deleted successfully!")
+            else:
+                print("Deletion cancelled.")
+            return
+    print("Area not found!")              
