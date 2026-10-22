@@ -172,42 +172,44 @@ def search_cities():
     print("\n ⬜ Search City ")
     city_id = input("Enter City ID to search: ")
     for city in cities:
-        if city["id"] == city_id:
+        if str(city["id"]) == city_id:
             print("\nCity Found!")
             print("City ID:", city["id"])
             print("City Name:", city["name"])
             print("State:", city["state"])
             return
-    print("City not found!")   
+    print("City not found!")
 def update_city():
     print("\n ⬜ Update City ")
+
     city_id = input("Enter City ID to update: ")
     for city in cities:
-        if city["id"] == city_id:
+        if str(city["id"]) == city_id:
             name = input(f"Enter new city name [{city['name']}]: ")
             state = input(f"Enter new state name [{city['state']}]: ")
             if name:
                 city["name"] = name
+
             if state:
                 city["state"] = state
+
             print("\nCity updated successfully!")
             return
     print("City not found!")
 def delete_city():
-    print("\n ⬜  Delete City ")
+    print("\n ⬜ Delete City ")
     city_id = input("Enter City ID to delete: ")
     for city in cities:
-        if city["id"] == city_id:
-            confirm = input(
-                f"Delete city {city['name']}? (yes/no): "
-            )
-            if confirm.lower() == "yes":
+        if str(city["id"]) == city_id:
+            confirm = input( f"Delete city {city['name']}? (yes/no): " ).lower()
+            if confirm == "yes":
                 cities.remove(city)
                 print("\nCity deleted successfully!")
             else:
                 print("Deletion cancelled.")
             return
     print("City not found!")
+
 
 collections=[]
 def add_collection():
@@ -309,6 +311,77 @@ def delete_collection():
             return
     print("Collection not found!")  
 
+providers = []
+def add_provider():
+    print("\n  ADD SERVICE PROVIDER  ")
+    provider_id = input("Enter Provider ID: ")
+    for provider in providers:
+        if provider["id"] == provider_id:
+            print("Error: Provider ID already exists!")
+            return
+    name = input("Enter Provider Name: ")
+    service_type = input("Enter Service Type: ")
+    city_id = input("Enter City ID: ")
+    provider = {
+        "id": provider_id,
+        "name": name,
+        "service_type": service_type,
+        "city_id": city_id
+    }
+    providers.append(provider)
+    print("\nService Provider added successfully!")
+def view_providers():
+    print("\n  REGISTERED SERVICE PROVIDERS  ")
+    if not providers:
+        print("No service providers registered yet.")
+        return
+    for provider in providers:
+        print("Provider ID:", provider["id"])
+        print("Provider Name:", provider["name"])
+        print("Service Type:", provider["service_type"])
+        print("City ID:", provider["city_id"])
+def search_provider():
+    print("\n  SEARCH SERVICE PROVIDER  ")
+    provider_id = input("Enter Provider ID to search: ")
+    for provider in providers:
+        if provider["id"] == provider_id:
+            print("\nService Provider Found!")
+            print("Provider ID:", provider["id"])
+            print("Provider Name:", provider["name"])
+            print("Service Type:", provider["service_type"])
+            print("City ID:", provider["city_id"])
+            return
+    print("Service Provider not found!")
+def update_provider():
+    print("\n  UPDATE SERVICE PROVIDER  ")
+    provider_id = input("Enter Provider ID to update: ")
+    for provider in providers:
+        if provider["id"] == provider_id:
+            name = input("Enter new Provider Name: ")
+            service_type = input("Enter new Service Type: ")
+            city_id = input("Enter new City ID: ")
+            if name:
+                provider["name"] = name
+            if service_type:
+                provider["service_type"] = service_type
+            if city_id:
+                provider["city_id"] = city_id
+            print("\nService Provider updated successfully!")
+            return
+    print("Service Provider not found!")
+def delete_provider():
+    print("\n  DELETE SERVICE PROVIDER  ")
+    provider_id = input("Enter Provider ID to delete: ")
+    for provider in providers:
+        if provider["id"] == provider_id:
+            confirm = input( f"Delete service provider {provider['name']}? (yes/no): " ).lower()
+            if confirm == "yes":
+                providers.remove(provider)
+                print("\nService Provider deleted successfully!")
+            else:
+                print("Deletion cancelled.")
+            return
+    print("Service Provider not found!")
 schedules = []
 def add_schedule():
     print("\n ⬜  Add Waste Collection Schedule ")
@@ -563,4 +636,4 @@ def delete_bill():
             else:
                 print("Deletion cancelled.")
             return
-    print("Bill not found!")    
+    print("Bill not found!")  
