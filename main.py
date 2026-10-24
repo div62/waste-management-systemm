@@ -10,7 +10,7 @@ while True:
     print("4. 🗳️  Scheduling & Request  Management")
     print("5. 🧾 Billing")
     print("6. ➡️  Exit")
-    choice = input("\nEnter your choice (1-8): ")
+    choice = input("\nEnter your choice (1-6): ")
     if choice == "1":
         while True:
             print("\n  USER MANAGEMENT  ")
