@@ -1,10 +1,26 @@
 from database import connect_db, create_tables
 create_tables()
+def generate_id(table_name, prefix):
+    """Generate the next available ID for the console application."""
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM " + table_name)
+    records = cursor.fetchall()
+    conn.close()
+    highest_number = 0
+    for record in records:
+        current_id = str(record[0])
+        if current_id.startswith(prefix):
+            number_part = current_id[len(prefix):]
+            if number_part.isdigit() and int(number_part) > highest_number:
+                highest_number = int(number_part)
+    return prefix + str(highest_number + 1).zfill(3)
 
 users = []
 def add_user():
     print("\n ⬜ Add New User ")
-    user_id = input("Enter User ID: ")
+    user_id = generate_id("users", "U")
+    print("Generated User ID:", user_id)
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
@@ -107,12 +123,12 @@ def delete_user():
             print("Deletion cancelled.")
     else:
         print("User not found!")
-
     conn.close()
 waste_types = []
 def add_waste():
     print("\n ⬜ Add Waste Type ")
-    waste_id = input("Enter Waste ID: ")
+    waste_id = generate_id("waste_types", "W")
+    print("Generated Waste ID:", waste_id)
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM waste_types WHERE id = ?", (waste_id,))
@@ -227,7 +243,8 @@ def delete_waste():
 cities = []
 def add_city():
     print("\n ⬜ Add City ")
-    city_id = input("Enter City ID: ")
+    city_id = generate_id("cities", "C")
+    print("Generated City ID:", city_id)
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM cities WHERE id = ?", (city_id,))
@@ -344,7 +361,8 @@ def delete_city():
 collections=[]
 def add_collection():
     print("\n ⬜ Add Waste Collection ")
-    collection_id = input("Enter Collection ID: ")
+    collection_id = generate_id("waste_collections", "WC")
+    print("Generated Collection ID:", collection_id)
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute(
@@ -508,7 +526,8 @@ def delete_collection():
 providers = []
 def add_provider():
     print("\n ⬜ Add Service Provider ")
-    provider_id = input("Enter Provider ID: ")
+    provider_id = generate_id("providers", "P")
+    print("Generated Provider ID:", provider_id)
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM providers WHERE id = ?",(provider_id,))
@@ -618,7 +637,8 @@ def delete_provider():
 schedules = []
 def add_schedule():
     print("\n ⬜ Add Collection Schedule ")
-    schedule_id = input("Enter Schedule ID: ")
+    schedule_id = generate_id("schedules", "S")
+    print("Generated Schedule ID:", schedule_id)
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute(
@@ -763,7 +783,8 @@ def delete_schedule():
 requests = []
 def add_request():
     print("\n ⬜ Add Waste Collection Request ")
-    request_id = input("Enter Request ID: ")
+    request_id = generate_id("requests", "R")
+    print("Generated Request ID:", request_id)
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute(
@@ -931,7 +952,8 @@ def delete_request():
 bills = []
 def generate_bill():
     print("\n ⬜ Generate Bill ")
-    bill_id = input("Enter Bill ID: ")
+    bill_id = generate_id("bills", "B")
+    print("Generated Bill ID:", bill_id)
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute(
