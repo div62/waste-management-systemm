@@ -1,20 +1,14 @@
 
 from database import connect_db, create_tables
-
 create_tables()
-# ---------- Helpers ----------
-
 def fetch_one(sql, params=()):
-    """Run a query and return one row, or None."""
+
     conn = connect_db()
     try:
         return conn.execute(sql, params).fetchone()
     finally:
         conn.close()
-
-
 def fetch_all(sql, params=()):
-    """Run a query and return all rows."""
     conn = connect_db()
     try:
         return conn.execute(sql, params).fetchall()
@@ -23,7 +17,6 @@ def fetch_all(sql, params=()):
 
 
 def run_write(sql, params=()):
-    """Run an INSERT, UPDATE, or DELETE and return how many rows changed."""
     conn = connect_db()
     try:
         cursor = conn.execute(sql, params)
@@ -34,7 +27,6 @@ def run_write(sql, params=()):
 
 
 def generate_id(table_name, prefix):
-    """Return the next ID for a table, like U004 after U003."""
     records = fetch_all("SELECT id FROM " + table_name)
     highest_number = 0
     for record in records:
@@ -47,13 +39,11 @@ def generate_id(table_name, prefix):
 
 
 def ask_optional(label, current):
-    """Ask for a new text value. Pressing Enter keeps the current value."""
     text = input("Enter new " + label + " [" + str(current) + "]: ").strip()
     return text if text else current
 
 
 def ask_number(label):
-    """Ask for a number greater than 0, and keep asking until it is valid."""
     while True:
         text = input(label).strip()
         try:
@@ -68,7 +58,6 @@ def ask_number(label):
 
 
 def ask_optional_number(label, current):
-    """Ask for a new number greater than 0. Pressing Enter keeps the current value."""
     while True:
         text = input("Enter new " + label + " [" + str(current) + "]: ").strip()
         if not text:
@@ -82,16 +71,12 @@ def ask_optional_number(label, current):
             print("Please enter a number greater than 0.")
             continue
         return value
-
-
-# ---------- Users ----------
-
+# user
 def show_user(user):
     print("User ID:", user[0])
     print("Name:", user[1])
     print("Phone:", user[2])
     print("City:", user[3])
-
 
 def add_user():
     print("\n ⬜ Add New User ")
@@ -104,7 +89,6 @@ def add_user():
               (user_id, name, phone, city))
     print("\nUser added successfully!")
 
-
 def view_users():
     print("\n  ⬜ Registered Users ")
     users = fetch_all("SELECT * FROM users")
@@ -115,7 +99,6 @@ def view_users():
         print()
         show_user(user)
 
-
 def search_user():
     print("\n ⬜ Search User ")
     user_id = input("Enter User ID to search: ")
@@ -125,7 +108,6 @@ def search_user():
         show_user(user)
     else:
         print("User not found!")
-
 
 def update_user():
     print("\n ⬜ Update User ")
@@ -142,7 +124,6 @@ def update_user():
               (name, phone, city, user_id))
     print("\nUser updated successfully!")
 
-
 def delete_user():
     print("\n ⬜ Delete User ")
     user_id = input("Enter User ID to delete: ")
@@ -156,9 +137,7 @@ def delete_user():
         print("User deleted successfully!")
     else:
         print("Deletion cancelled.")
-
-
-# ---------- Waste types ----------
+# waste
 
 def show_waste(waste):
     print("Waste ID:", waste[0])
@@ -230,15 +209,12 @@ def delete_waste():
         print("Waste Type deleted successfully!")
     else:
         print("Deletion cancelled.")
-
-
-# ---------- Cities ----------
+# city
 
 def show_city(city):
     print("City ID:", city[0])
     print("City Name:", city[1])
     print("State:", city[2])
-
 
 def add_city():
     print("\n ⬜ Add City ")
@@ -248,7 +224,6 @@ def add_city():
     state = input("Enter State Name: ")
     run_write("INSERT INTO cities (id, name, state) VALUES (?, ?, ?)", (city_id, name, state))
     print("\nCity added successfully!")
-
 
 def view_cities():
     print("\n ⬜ Registered Cities ")
@@ -260,7 +235,6 @@ def view_cities():
         print()
         show_city(city)
 
-
 def search_cities():
     print("\n ⬜ Search City ")
     city_id = input("Enter City ID to search: ")
@@ -270,7 +244,6 @@ def search_cities():
         show_city(city)
     else:
         print("City not found!")
-
 
 def update_city():
     print("\n ⬜ Update City ")
@@ -285,7 +258,6 @@ def update_city():
     run_write("UPDATE cities SET name = ?, state = ? WHERE id = ?", (name, state, city_id))
     print("City updated successfully!")
 
-
 def delete_city():
     print("\n ⬜ Delete City ")
     city_id = input("Enter City ID to delete: ")
@@ -299,9 +271,7 @@ def delete_city():
         print("City deleted successfully!")
     else:
         print("Deletion cancelled.")
-
-
-# ---------- Waste collections ----------
+#waste collection
 
 def show_collection(collection):
     print("Collection ID:", collection[0])
@@ -312,7 +282,6 @@ def show_collection(collection):
     print("Service Provider ID:", collection[5])
     print("Collection Date:", collection[6])
     print("Collection Status:", collection[7])
-
 
 def add_collection():
     print("\n ⬜ Add Waste Collection ")
@@ -329,10 +298,8 @@ def add_collection():
         INSERT INTO waste_collections
         (id, waste_type, quantity, city_id, area_id, provider_id, collection_date, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-              (collection_id, waste_type, quantity, city_id, area_id,
-               provider_id, collection_date, status))
+              (collection_id, waste_type, quantity, city_id, area_id,provider_id, collection_date, status))
     print("\nWaste Collection added successfully!")
-
 
 def view_collections():
     print("\n ⬜ Registered Waste Collections ")
@@ -344,7 +311,6 @@ def view_collections():
         print()
         show_collection(collection)
 
-
 def search_collection():
     print("\n ⬜ Search Waste Collection ")
     collection_id = input("Enter Collection ID to search: ")
@@ -354,7 +320,6 @@ def search_collection():
         show_collection(collection)
     else:
         print("Waste Collection not found!")
-
 
 def update_collection():
     print("\n ⬜ Update Waste Collection ")
@@ -380,7 +345,6 @@ def update_collection():
                collection_date, status, collection_id))
     print("\nWaste Collection updated successfully!")
 
-
 def delete_collection():
     print("\n ⬜ Delete Waste Collection ")
     collection_id = input("Enter Collection ID to delete: ")
@@ -394,16 +358,13 @@ def delete_collection():
         print("Waste Collection deleted successfully!")
     else:
         print("Deletion cancelled.")
-
-
-# ---------- Service providers ----------
+# Service providers 
 
 def show_provider(provider):
     print("Provider ID:", provider[0])
     print("Provider Name:", provider[1])
     print("Service Type:", provider[2])
     print("City ID:", provider[3])
-
 
 def add_provider():
     print("\n ⬜ Add Service Provider ")
@@ -416,7 +377,6 @@ def add_provider():
               (provider_id, name, service_type, city_id))
     print("\nService Provider added successfully!")
 
-
 def view_providers():
     print("\n ⬜ Registered Service Providers ")
     providers = fetch_all("SELECT * FROM providers")
@@ -427,7 +387,6 @@ def view_providers():
         print()
         show_provider(provider)
 
-
 def search_provider():
     print("\n ⬜ Search Service Provider ")
     provider_id = input("Enter Provider ID to search: ")
@@ -437,7 +396,6 @@ def search_provider():
         show_provider(provider)
     else:
         print("Service Provider not found!")
-
 
 def update_provider():
     print("\n ⬜ Update Service Provider ")
@@ -454,7 +412,6 @@ def update_provider():
               (name, service_type, city_id, provider_id))
     print("Service Provider updated successfully!")
 
-
 def delete_provider():
     print("\n ⬜ Delete Service Provider ")
     provider_id = input("Enter Provider ID to delete: ")
@@ -468,9 +425,7 @@ def delete_provider():
         print("Service Provider deleted successfully!")
     else:
         print("Deletion cancelled.")
-
-
-# ---------- Schedules ----------
+#  Schedules 
 
 def show_schedule(schedule):
     print("Schedule ID:", schedule[0])
@@ -479,7 +434,6 @@ def show_schedule(schedule):
     print("Schedule Time:", schedule[3])
     print("Provider ID:", schedule[4])
     print("Schedule Status:", schedule[5])
-
 
 def add_schedule():
     print("\n ⬜ Add Collection Schedule ")
@@ -496,7 +450,6 @@ def add_schedule():
               (schedule_id, collection_id, date, time, provider_id, status))
     print("\nCollection Schedule added successfully!")
 
-
 def view_schedules():
     print("\n ⬜ Registered Collection Schedules ")
     schedules = fetch_all("SELECT * FROM schedules")
@@ -506,7 +459,6 @@ def view_schedules():
     for schedule in schedules:
         print()
         show_schedule(schedule)
-
 
 def search_schedule():
     print("\n ⬜ Search Collection Schedule ")
@@ -518,7 +470,6 @@ def search_schedule():
     else:
         print("Schedule not found!")
 
-
 def update_schedule():
     print("\n ⬜ Update Collection Schedule ")
     schedule_id = input("Enter Schedule ID to update: ")
@@ -526,7 +477,6 @@ def update_schedule():
     if not schedule:
         print("Schedule not found!")
         return
-    print("Leave blank to keep the existing value.")
     collection_id = ask_optional("Collection ID", schedule[1])
     date = ask_optional("Schedule Date", schedule[2])
     time = ask_optional("Schedule Time", schedule[3])
@@ -538,7 +488,6 @@ def update_schedule():
         WHERE id = ?""",
               (collection_id, date, time, provider_id, status, schedule_id))
     print("\nCollection Schedule updated successfully!")
-
 
 def delete_schedule():
     print("\n ⬜ Delete Collection Schedule ")
@@ -553,9 +502,7 @@ def delete_schedule():
         print("Collection Schedule deleted successfully!")
     else:
         print("Deletion cancelled.")
-
-
-# ---------- Requests ----------
+#  Requests 
 
 def show_request(request):
     print("Request ID:", request[0])
@@ -566,7 +513,6 @@ def show_request(request):
     print("Area ID:", request[5])
     print("Preferred Date:", request[6])
     print("Request Status:", request[7])
-
 
 def add_request():
     print("\n ⬜ Add Waste Collection Request ")
@@ -587,7 +533,6 @@ def add_request():
                preferred_date, status))
     print("\nWaste Collection Request added successfully!")
 
-
 def view_requests():
     print("\n ⬜ Registered Waste Collection Requests ")
     requests = fetch_all("SELECT * FROM requests")
@@ -597,7 +542,6 @@ def view_requests():
     for request in requests:
         print()
         show_request(request)
-
 
 def search_request():
     print("\n ⬜ Search Waste Collection Request ")
@@ -609,7 +553,6 @@ def search_request():
     else:
         print("Request not found!")
 
-
 def update_request():
     print("\n ⬜ Update Waste Collection Request ")
     request_id = input("Enter Request ID to update: ")
@@ -617,7 +560,6 @@ def update_request():
     if not request:
         print("Request not found!")
         return
-    print("Leave blank to keep the existing value.")
     user_id = ask_optional("User ID", request[1])
     waste_type = ask_optional("Waste Type", request[2])
     quantity = ask_optional("Quantity (kg)", request[3])
@@ -634,7 +576,6 @@ def update_request():
                preferred_date, status, request_id))
     print("\nWaste Collection Request updated successfully!")
 
-
 def delete_request():
     print("\n ⬜ Delete Waste Collection Request ")
     request_id = input("Enter Request ID to delete: ")
@@ -650,9 +591,7 @@ def delete_request():
         print("Request deleted successfully!")
     else:
         print("Request deletion cancelled!")
-
-
-# ---------- Bills ----------
+#  Bills
 
 def show_bill(bill):
     print("Bill ID:", bill[0])
@@ -662,7 +601,6 @@ def show_bill(bill):
     print("Rate per kg: ₹", bill[4])
     print("Total Amount: ₹", bill[5])
     print("Payment Status:", bill[6])
-
 
 def generate_bill():
     print("\n ⬜ Generate Bill ")
@@ -682,7 +620,6 @@ def generate_bill():
     print("\nBill generated successfully!")
     print("Total Amount: ₹", total_amount)
 
-
 def view_bills():
     print("\n ⬜ Registered Bills ")
     bills = fetch_all("SELECT * FROM bills")
@@ -692,7 +629,6 @@ def view_bills():
     for bill in bills:
         print()
         show_bill(bill)
-
 
 def search_bill():
     print("\n ⬜ Search Bill ")
@@ -704,7 +640,6 @@ def search_bill():
     else:
         print("Bill not found!")
 
-
 def update_bill():
     print("\n ⬜ Update Bill ")
     bill_id = input("Enter Bill ID to update: ")
@@ -712,7 +647,6 @@ def update_bill():
     if not bill:
         print("Bill not found!")
         return
-    print("Leave blank to keep the existing value.")
     user_id = ask_optional("User ID", bill[1])
     collection_id = ask_optional("Collection ID", bill[2])
     quantity = ask_optional_number("Quantity (kg)", bill[3])
@@ -727,7 +661,6 @@ def update_bill():
               (user_id, collection_id, quantity, rate, total_amount, payment_status, bill_id))
     print("\nBill updated successfully!")
     print("Updated Total Amount: ₹", total_amount)
-
 
 def delete_bill():
     print("\n ⬜ Delete Bill ")

@@ -1,7 +1,3 @@
-"""
-BinGO dashboard and pages.
-bingo_login.py starts the app and passes in the role and the linked profile ID.
-"""
 import csv
 import os
 import sqlite3
@@ -47,7 +43,6 @@ MODULES = {
     "Billing": ("bills", ["id", "user_id", "collection_id", "quantity", "rate", "total_amount", "payment_status"]),
 }
 
-# The pages each role can open. None means every page.
 ROLE_PAGES = {
     "Admin": None,
     "Customer": {"Dashboard", "Requests", "Billing"},
@@ -58,9 +53,6 @@ ID_PREFIXES = {
     "users": "U", "waste_types": "W", "cities": "C", "providers": "P",
     "waste_collections": "WC", "schedules": "S", "requests": "R", "bills": "B",
 }
-
-# Fields that point to another table. The dropdown shows a name,
-# and the database stores the related record ID.
 REFERENCE_FIELDS = {
     ("providers", "city_id"): ("cities", "name"),
     ("waste_collections", "waste_type"): ("waste_types", "name"),
@@ -74,9 +66,6 @@ REFERENCE_FIELDS = {
     ("bills", "user_id"): ("users", "name"),
     ("bills", "collection_id"): ("waste_collections", "id"),
 }
-
-
-# ---------- Database helpers ----------
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -291,8 +280,6 @@ class BinGOApp(ctk.CTk):
         ctk.CTkLabel(
             self.page_area, text=subtitle, font=("Segoe UI", 12), text_color=MUTED
         ).pack(anchor="w", padx=8, pady=(2, 15))
-
-    # ---------- Dashboard ----------
 
     def show_dashboard(self):
         self.clear_page()
@@ -570,7 +557,6 @@ class BinGOApp(ctk.CTk):
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=8, pady=4)
 
-    # ---------- Record pages ----------
 
     def filter_rows_for_role(self, page_name, columns, rows):
         """Keep only the rows this login is allowed to see."""
@@ -1020,8 +1006,6 @@ class BinGOApp(ctk.CTk):
         ctk.CTkButton(buttons, text="Save Record", width=130, height=38, fg_color=GREEN,
                       hover_color=DARK_GREEN, command=save_record).pack(side="right")
 
-    # ---------- Service provider actions ----------
-
     def get_provider_city(self):
         """Return the city ID saved on this service provider's profile."""
         connection = get_connection()
@@ -1063,8 +1047,7 @@ class BinGOApp(ctk.CTk):
         try:
             connection = get_connection()
             cursor = connection.cursor()
-            # Accept only if the request is Pending, or Accepted with no collection left.
-            # The check and the update happen in one step, so two providers can't both win.
+
             cursor.execute(
                 'UPDATE "requests" SET "status" = ? WHERE "id" = ? AND ("status" = ? OR '
                 '("status" = ? AND "id" NOT IN (SELECT "request_id" FROM "waste_collections" '
@@ -1115,7 +1098,7 @@ class BinGOApp(ctk.CTk):
         try:
             connection = get_connection()
             cursor = connection.cursor()
-            # The provider_id check means a provider can only change their own collections.
+            
             cursor.execute(
                 'SELECT "request_id" FROM "waste_collections" WHERE "id" = ? AND "provider_id" = ?',
                 (collection_id, self.linked_id),
@@ -1131,7 +1114,7 @@ class BinGOApp(ctk.CTk):
                     'WHERE "id" = ? AND "provider_id" = ? AND "status" = ?',
                     ("Collected", collection_id, self.linked_id, "Assigned"),
                 )
-                if request_id:  # Older collections have no linked request.
+                if request_id:  
                     cursor.execute('UPDATE "requests" SET "status" = ? WHERE "id" = ?',
                                    ("Completed", request_id))
                 connection.commit()
@@ -1147,8 +1130,6 @@ class BinGOApp(ctk.CTk):
         self.selected_record = None
         self.show_module("Waste Collections")
 
-    # ---------- Customer actions ----------
-
     def open_new_request_form(self):
         """Customer creates a pickup request. Every field is a choice from a list."""
         connection = get_connection()
@@ -1163,8 +1144,6 @@ class BinGOApp(ctk.CTk):
         if not waste_rows:
             messagebox.showwarning("No Waste Types", "The admin needs to add waste types first.", parent=self)
             return
-
-        # state -> {city label -> city ID}. Labels are plain names, like "Amritsar".
         state_map = {}
         for city_id, name, state in city_rows:
             city_map = state_map.setdefault(state or "Other", {})
@@ -1173,7 +1152,6 @@ class BinGOApp(ctk.CTk):
                 label = name + " (" + str(city_id) + ")"
             city_map[label] = city_id
 
-        # waste type label -> waste type ID
         waste_map = {}
         for waste_id, name in waste_rows:
             label = name

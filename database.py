@@ -1,19 +1,13 @@
 import os
 import sqlite3
-
-# Always use the bingo.db in this folder, the same file the GUI uses.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "bingo.db")
-
-
 def connect_db():
     return sqlite3.connect(DB_PATH)
-
 
 def create_tables():
     conn = connect_db()
     cursor = conn.cursor()
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
@@ -81,11 +75,8 @@ def create_tables():
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL,
             linked_id TEXT)""")
-
     conn.commit()
     conn.close()
-
-
 if __name__ == "__main__":
     create_tables()
     print("BinGO database created successfully!")
