@@ -1,10 +1,16 @@
+"""
+BinGO dashboard and pages.
+bingo_login.py starts the app and passes in the role and the linked profile ID.
+"""
+import csv
 import os
 import sqlite3
-import csv
-import customtkinter as ctk
+from datetime import datetime
 from tkinter import filedialog, messagebox
-from matplotlib.figure import Figure
+
+import customtkinter as ctk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
@@ -22,6 +28,8 @@ RED = "#D9534F"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "bingo.db")
 
+SELECT_TEXT = "Select..."
+
 MODULES = {
     "User Management": ("users", ["id", "name", "phone", "city"]),
     "Waste Management": ("waste_types", ["id", "name", "category", "description"]),
@@ -29,44 +37,30 @@ MODULES = {
     "Service Providers": ("providers", ["id", "name", "service_type", "city_id"]),
     "Waste Collections": ("waste_collections", [
         "id", "waste_type", "quantity", "city_id", "area_id",
-        "provider_id", "collection_date", "status"
+        "provider_id", "collection_date", "status",
     ]),
     "Scheduling": ("schedules", ["id", "collection_id", "date", "time", "provider_id", "status"]),
     "Requests": ("requests", [
         "id", "user_id", "waste_type", "quantity", "city_id",
-        "area_id", "preferred_date", "status"
+        "area_id", "preferred_date", "status",
     ]),
-    "Billing": ("bills", ["id", "user_id", "collection_id", "quantity", "rate", "total_amount", "payment_status"])
-}
-def get_connection():
-    return sqlite3.connect(DB_PATH)
-def get_count(table_name):
-    """Return the number of records in a database table."""
-    try:
-        connection = get_connection()
-        cursor = connection.cursor()
-        cursor.execute("SELECT COUNT(*) FROM " + table_name)
-        count = cursor.fetchone()[0]
-        connection.close()
-        return count
-    except sqlite3.Error:
-        return 0
-def get_rows(table_name, columns):
-    """Read records for a module table."""
-    connection = get_connection()
-    cursor = connection.cursor()
-    column_text = ", ".join('"' + column + '"' for column in columns)
-    cursor.execute("SELECT " + column_text + " FROM \"" + table_name + "\"")
-    rows = cursor.fetchall()
-    connection.close()
-    return rows
-ID_PREFIXES = {
-    "users": "U", "waste_types": "W", "cities": "C", "providers": "P",
-    "waste_collections": "WC", "schedules": "S", "requests": "R", "bills": "B"
+    "Billing": ("bills", ["id", "user_id", "collection_id", "quantity", "rate", "total_amount", "payment_status"]),
 }
 
-# Fields that refer to another table. The dropdown displays a friendly name,
-# while the database stores the related record ID.
+# The pages each role can open. None means every page.
+ROLE_PAGES = {
+    "Admin": None,
+    "Customer": {"Dashboard", "Requests", "Billing"},
+    "Service Provider": {"Dashboard", "Requests", "Waste Collections", "Scheduling"},
+}
+
+ID_PREFIXES = {
+    "users": "U", "waste_types": "W", "cities": "C", "providers": "P",
+    "waste_collections": "WC", "schedules": "S", "requests": "R", "bills": "B",
+}
+
+# Fields that point to another table. The dropdown shows a name,
+# and the database stores the related record ID.
 REFERENCE_FIELDS = {
     ("providers", "city_id"): ("cities", "name"),
     ("waste_collections", "waste_type"): ("waste_types", "name"),
@@ -78,49 +72,84 @@ REFERENCE_FIELDS = {
     ("requests", "waste_type"): ("waste_types", "name"),
     ("requests", "city_id"): ("cities", "name"),
     ("bills", "user_id"): ("users", "name"),
-    ("bills", "collection_id"): ("waste_collections", "id")
+    ("bills", "collection_id"): ("waste_collections", "id"),
 }
 
+
+# ---------- Database helpers ----------
+
+def get_connection():
+    return sqlite3.connect(DB_PATH)
+
+
+def get_count(table_name):
+    """Return the number of records in a table."""
+    try:
+        connection = get_connection()
+        count = connection.execute('SELECT COUNT(*) FROM "' + table_name + '"').fetchone()[0]
+        connection.close()
+        return count
+    except sqlite3.Error:
+        return 0
+
+
+def get_rows(table_name, columns):
+    """Read the given columns from a table."""
+    connection = get_connection()
+    column_text = ", ".join('"' + column + '"' for column in columns)
+    rows = connection.execute("SELECT " + column_text + ' FROM "' + table_name + '"').fetchall()
+    connection.close()
+    return rows
+
+
 def generate_id(table_name):
-    """Generate the next ID using the table's prefix and existing records."""
+    """Make the next ID for a table, such as R003 after R002."""
     prefix = ID_PREFIXES[table_name]
     connection = get_connection()
-    cursor = connection.cursor()
-    cursor.execute("SELECT id FROM \"" + table_name + "\"")
-    existing_ids = cursor.fetchall()
+    existing_ids = connection.execute('SELECT id FROM "' + table_name + '"').fetchall()
     connection.close()
     highest_number = 0
-    for row in existing_ids:
-        value = str(row[0])
+    for (value,) in existing_ids:
+        value = str(value)
         if value.startswith(prefix):
             number_part = value[len(prefix):]
             if number_part.isdigit() and int(number_part) > highest_number:
                 highest_number = int(number_part)
     return prefix + str(highest_number + 1).zfill(3)
 
+
 def get_reference_options(table_name, column):
-    """Return dropdown labels mapped to the ID/value stored in SQLite."""
+    """Return dropdown labels mapped to the ID stored in the database."""
     reference = REFERENCE_FIELDS.get((table_name, column))
     if not reference:
         return None
     related_table, display_column = reference
     connection = get_connection()
-    cursor = connection.cursor()
-    cursor.execute("SELECT id, \"" + display_column + "\" FROM \"" + related_table + "\" ORDER BY id")
-    rows = cursor.fetchall()
+    rows = connection.execute(
+        'SELECT id, "' + display_column + '" FROM "' + related_table + '" ORDER BY id'
+    ).fetchall()
     connection.close()
-    options = {}
-    for record_id, display_name in rows:
-        label = str(display_name) + " (" + str(record_id) + ")"
-        options[label] = str(record_id)
-    return options
+    return {
+        str(display_name) + " (" + str(record_id) + ")": str(record_id)
+        for record_id, display_name in rows
+    }
 
-ROLE_PAGES = {
-    "Admin": None,
-    "Customer": {"Dashboard", "Requests", "Billing"},
-    "Service Provider": {"Dashboard", "Requests", "Waste Collections", "Scheduling"},
-}
 
+def search_rows(rows, search_text):
+    """Keep the rows where any shown value contains the search text."""
+    search_value = search_text.lower()
+    return [
+        row for row in rows
+        if any(search_value in str(value).lower() for value in row if value is not None)
+    ]
+
+
+def row_stripe(row_index):
+    """Alternate the background colour of table rows."""
+    return "#F6FAF8" if row_index % 2 == 1 else WHITE
+
+
+# ---------- Main window ----------
 
 class BinGOApp(ctk.CTk):
     def __init__(self, role="Admin", linked_id=None):
@@ -132,8 +161,8 @@ class BinGOApp(ctk.CTk):
         self.minsize(1100, 680)
         self.configure(fg_color=BACKGROUND)
         self.current_page = "Dashboard"
-        self.chart_canvas = None
         self.selected_record = None
+        self.row_cells = []
         self.create_layout()
         self.show_dashboard()
         self.after(30000, self.auto_refresh_dashboard)
@@ -144,8 +173,7 @@ class BinGOApp(ctk.CTk):
         self.sidebar.pack_propagate(False)
 
         ctk.CTkLabel(
-            self.sidebar, text="♻️ BinGO", font=("Segoe UI", 29, "bold"),
-            text_color=WHITE
+            self.sidebar, text="♻️ BinGO", font=("Segoe UI", 29, "bold"), text_color=WHITE
         ).pack(anchor="w", padx=22, pady=(25, 2))
         ctk.CTkLabel(
             self.sidebar, text="SMART WASTE MANAGEMENT", font=("Segoe UI", 10, "bold"),
@@ -162,14 +190,13 @@ class BinGOApp(ctk.CTk):
             ("Waste Collections", "🔶"),
             ("Scheduling", "🕑"),
             ("Requests", "🗳️"),
-            ("Billing", "🧾")
+            ("Billing", "🧾"),
         ]
 
         allowed_pages = ROLE_PAGES.get(self.role)
         for name, icon in menu_items:
             if allowed_pages is not None and name not in allowed_pages:
                 continue
-
             button = ctk.CTkButton(
                 self.sidebar,
                 text=icon + "    " + name,
@@ -180,7 +207,7 @@ class BinGOApp(ctk.CTk):
                 fg_color="transparent",
                 hover_color="#0B8066",
                 text_color=WHITE,
-                command=lambda page=name: self.open_page(page)
+                command=lambda page=name: self.open_page(page),
             )
             button.pack(fill="x", padx=12, pady=3)
             self.nav_buttons[name] = button
@@ -189,23 +216,24 @@ class BinGOApp(ctk.CTk):
         ctk.CTkButton(
             self.sidebar, text="↪    Exit Application", height=42,
             corner_radius=9, fg_color="#B84040", hover_color="#963333",
-            text_color=WHITE, command=self.confirm_exit
+            text_color=WHITE, command=self.confirm_exit,
         ).pack(side="bottom", fill="x", padx=12, pady=18)
 
         self.main_panel = ctk.CTkFrame(self, corner_radius=0, fg_color=BACKGROUND)
         self.main_panel.pack(side="right", fill="both", expand=True)
 
-        self.topbar = ctk.CTkFrame(self.main_panel, height=64, corner_radius=0, fg_color=WHITE, border_width=1, border_color=BORDER)
+        self.topbar = ctk.CTkFrame(
+            self.main_panel, height=64, corner_radius=0, fg_color=WHITE,
+            border_width=1, border_color=BORDER,
+        )
         self.topbar.pack(fill="x")
         self.topbar.pack_propagate(False)
         self.topbar_title = ctk.CTkLabel(
-            self.topbar, text="BinGO Dashboard", font=("Segoe UI", 17, "bold"),
-            text_color=TEXT
+            self.topbar, text="BinGO Dashboard", font=("Segoe UI", 17, "bold"), text_color=TEXT
         )
         self.topbar_title.pack(side="left", padx=24)
         ctk.CTkLabel(
-            self.topbar, text="●  System Ready", font=("Segoe UI", 11),
-            text_color=GREEN
+            self.topbar, text="●  System Ready", font=("Segoe UI", 11), text_color=GREEN
         ).pack(side="right", padx=24)
 
         self.page_area = ctk.CTkFrame(self.main_panel, fg_color=BACKGROUND, corner_radius=0)
@@ -214,10 +242,9 @@ class BinGOApp(ctk.CTk):
     def clear_page(self):
         for widget in self.page_area.winfo_children():
             widget.destroy()
-        self.chart_canvas = None
 
     def add_card_hover(self, card, normal_color=WHITE, hover_color=LIGHT_GREEN):
-        """Give dashboard cards a gentle colour-and-border hover effect."""
+        """Give a card a colour and border change when the mouse moves over it."""
         def on_enter(event=None):
             try:
                 card.configure(fg_color=hover_color, border_color=GREEN, border_width=2)
@@ -238,10 +265,7 @@ class BinGOApp(ctk.CTk):
 
     def set_active_button(self, page_name):
         for name, button in self.nav_buttons.items():
-            if name == page_name:
-                button.configure(fg_color="#15977D")
-            else:
-                button.configure(fg_color="transparent")
+            button.configure(fg_color="#15977D" if name == page_name else "transparent")
 
     def open_page(self, page_name):
         self.current_page = page_name
@@ -253,7 +277,7 @@ class BinGOApp(ctk.CTk):
             self.show_module(page_name)
 
     def auto_refresh_dashboard(self):
-        """Refresh dashboard cards and charts periodically when Dashboard is open."""
+        """Refresh the dashboard every 30 seconds while it is open."""
         if not self.winfo_exists():
             return
         if self.current_page == "Dashboard":
@@ -262,13 +286,13 @@ class BinGOApp(ctk.CTk):
 
     def create_heading(self, title, subtitle):
         ctk.CTkLabel(
-            self.page_area, text=title, font=("Segoe UI", 27, "bold"),
-            text_color=TEXT
+            self.page_area, text=title, font=("Segoe UI", 27, "bold"), text_color=TEXT
         ).pack(anchor="w", padx=8, pady=(3, 0))
         ctk.CTkLabel(
-            self.page_area, text=subtitle, font=("Segoe UI", 12),
-            text_color=MUTED
+            self.page_area, text=subtitle, font=("Segoe UI", 12), text_color=MUTED
         ).pack(anchor="w", padx=8, pady=(2, 15))
+
+    # ---------- Dashboard ----------
 
     def show_dashboard(self):
         self.clear_page()
@@ -280,46 +304,39 @@ class BinGOApp(ctk.CTk):
         body = ctk.CTkScrollableFrame(self.page_area, fg_color=BACKGROUND, corner_radius=10)
         body.pack(fill="both", expand=True)
 
-        dashboard_heading = ctk.CTkFrame(body, fg_color="transparent")
-        dashboard_heading.pack(fill="x", padx=8, pady=(8, 0))
+        heading = ctk.CTkFrame(body, fg_color="transparent")
+        heading.pack(fill="x", padx=8, pady=(8, 0))
         ctk.CTkLabel(
-            dashboard_heading, text="Dashboard & Analytics", font=("Segoe UI", 27, "bold"),
-            text_color=TEXT
+            heading, text="Dashboard & Analytics", font=("Segoe UI", 27, "bold"), text_color=TEXT
         ).pack(side="left", anchor="w")
         ctk.CTkButton(
-            dashboard_heading, text="↻ Refresh Dashboard", width=150, height=32,
-            fg_color=GREEN, hover_color=DARK_GREEN,
-            command=self.show_dashboard
+            heading, text="↻ Refresh Dashboard", width=150, height=32,
+            fg_color=GREEN, hover_color=DARK_GREEN, command=self.show_dashboard,
         ).pack(side="right", padx=(8, 0), pady=(2, 0))
 
-        if is_admin:
-            welcome = "Welcome back! Click any card to open that section."
-        else:
-            welcome = "Welcome back! Click a card to open that section."
-        ctk.CTkLabel(
-            body, text=welcome, font=("Segoe UI", 12), text_color=MUTED
-        ).pack(anchor="w", padx=8, pady=(3, 15))
+        welcome = ("Welcome back! Click any card to open that section." if is_admin
+                   else "Welcome back! Click a card to open that section.")
+        ctk.CTkLabel(body, text=welcome, font=("Segoe UI", 12), text_color=MUTED).pack(
+            anchor="w", padx=8, pady=(3, 15))
 
         def count_rows(table_name, column=None):
             """Count all rows, or only the rows that belong to this login."""
             try:
                 connection = get_connection()
-                cursor = connection.cursor()
                 if column is None:
-                    cursor.execute('SELECT COUNT(*) FROM "' + table_name + '"')
+                    count = connection.execute('SELECT COUNT(*) FROM "' + table_name + '"').fetchone()[0]
                 else:
-                    cursor.execute(
+                    count = connection.execute(
                         'SELECT COUNT(*) FROM "' + table_name + '" WHERE "' + column + '" = ?',
-                        (self.linked_id,)
-                    )
-                count = cursor.fetchone()[0]
+                        (self.linked_id,),
+                    ).fetchone()[0]
                 connection.close()
                 return count
             except sqlite3.Error:
                 return 0
 
         def make_clickable(widget, page_name):
-            """Open a page when the card or anything inside it is clicked."""
+            """Open a page when the card, or anything inside it, is clicked."""
             widget.bind("<Button-1>", lambda event: self.open_page(page_name))
             try:
                 widget.configure(cursor="hand2")
@@ -347,13 +364,15 @@ class BinGOApp(ctk.CTk):
             ]
         else:
             stats = [
-                ("My Collections", count_rows("waste_collections", "provider_id"), "Collections assigned to you", "Waste Collections", "📦"),
-                ("My Schedules", count_rows("schedules", "provider_id"), "Your planned collections", "Scheduling", "🗓️"),
+                ("My Collections", count_rows("waste_collections", "provider_id"),
+                 "Collections assigned to you", "Waste Collections", "📦"),
+                ("My Schedules", count_rows("schedules", "provider_id"),
+                 "Your planned collections", "Scheduling", "🗓️"),
             ]
 
         ctk.CTkLabel(
             body, text="SYSTEM OVERVIEW" if is_admin else "YOUR OVERVIEW",
-            font=("Segoe UI", 10, "bold"), text_color=GREEN
+            font=("Segoe UI", 10, "bold"), text_color=GREEN,
         ).pack(anchor="w", padx=8, pady=(0, 4))
 
         cards = ctk.CTkFrame(body, fg_color="transparent")
@@ -363,29 +382,20 @@ class BinGOApp(ctk.CTk):
             row = index // 4
             column = index % 4
             cards.grid_columnconfigure(column, weight=1, uniform="stats")
-            card = ctk.CTkFrame(
-                cards, fg_color=WHITE, corner_radius=15,
-                border_width=1, border_color=BORDER
-            )
+            card = ctk.CTkFrame(cards, fg_color=WHITE, corner_radius=15, border_width=1, border_color=BORDER)
             card.grid(row=row, column=column, sticky="nsew", padx=5, pady=5)
 
-            # A small green accent gives every statistic card a consistent style.
             ctk.CTkFrame(card, height=4, fg_color=GREEN, corner_radius=0).pack(fill="x")
             card_top = ctk.CTkFrame(card, fg_color="transparent")
             card_top.pack(fill="x", padx=13, pady=(10, 1))
-            ctk.CTkLabel(
-                card_top, text=title, font=("Segoe UI", 11, "bold"), text_color=TEXT
-            ).pack(side="left", anchor="w")
-            ctk.CTkLabel(
-                card_top, text=icon, font=("Segoe UI Emoji", 17), text_color=GREEN
-            ).pack(side="right", anchor="e")
-            ctk.CTkLabel(
-                card, text=str(value), font=("Segoe UI", 27, "bold"),
-                text_color=DARK_GREEN
-            ).pack(anchor="w", padx=13, pady=(1, 1))
-            ctk.CTkLabel(
-                card, text=description, font=("Segoe UI", 9), text_color=MUTED
-            ).pack(anchor="w", padx=13, pady=(0, 12))
+            ctk.CTkLabel(card_top, text=title, font=("Segoe UI", 11, "bold"), text_color=TEXT).pack(
+                side="left", anchor="w")
+            ctk.CTkLabel(card_top, text=icon, font=("Segoe UI Emoji", 17), text_color=GREEN).pack(
+                side="right", anchor="e")
+            ctk.CTkLabel(card, text=str(value), font=("Segoe UI", 27, "bold"), text_color=DARK_GREEN).pack(
+                anchor="w", padx=13, pady=(1, 1))
+            ctk.CTkLabel(card, text=description, font=("Segoe UI", 9), text_color=MUTED).pack(
+                anchor="w", padx=13, pady=(0, 12))
 
             self.add_card_hover(card)
             make_clickable(card, page_name)
@@ -395,7 +405,6 @@ class BinGOApp(ctk.CTk):
             chart_section.pack(fill="both", expand=True, padx=3, pady=(0, 10))
             chart_section.grid_columnconfigure(0, weight=3, uniform="charts")
             chart_section.grid_columnconfigure(1, weight=2, uniform="charts")
-
             chart_section.grid_rowconfigure(0, weight=3, minsize=280)
             chart_section.grid_rowconfigure(1, weight=2, minsize=250)
 
@@ -403,65 +412,53 @@ class BinGOApp(ctk.CTk):
             bar_card.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
             pie_card = ctk.CTkFrame(chart_section, fg_color=WHITE, corner_radius=15, border_width=1, border_color=BORDER)
             pie_card.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-
-            # A third graph spans the width below the first two charts.
             trend_card = ctk.CTkFrame(chart_section, fg_color=WHITE, corner_radius=15, border_width=1, border_color=BORDER)
             trend_card.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
             self.add_card_hover(bar_card)
             self.add_card_hover(pie_card)
             self.add_card_hover(trend_card)
 
-            ctk.CTkLabel(bar_card, text="Waste Quantity by Type", font=("Segoe UI", 14, "bold"), text_color=TEXT).pack(
-                anchor="w", padx=14, pady=(12, 0)
-            )
-            ctk.CTkLabel(pie_card, text="Collection Status", font=("Segoe UI", 14, "bold"), text_color=TEXT).pack(
-                anchor="w", padx=14, pady=(12, 0)
-            )
-            ctk.CTkLabel(trend_card, text="Waste Collected by Date", font=("Segoe UI", 14, "bold"), text_color=TEXT).pack(
-                anchor="w", padx=14, pady=(12, 0)
-            )
+            ctk.CTkLabel(bar_card, text="Waste Quantity by Type", font=("Segoe UI", 14, "bold"),
+                         text_color=TEXT).pack(anchor="w", padx=14, pady=(12, 0))
+            ctk.CTkLabel(pie_card, text="Collection Status", font=("Segoe UI", 14, "bold"),
+                         text_color=TEXT).pack(anchor="w", padx=14, pady=(12, 0))
+            ctk.CTkLabel(trend_card, text="Waste Collected by Date", font=("Segoe UI", 14, "bold"),
+                         text_color=TEXT).pack(anchor="w", padx=14, pady=(12, 0))
             self.create_charts(bar_card, pie_card)
             self.create_collection_trend_chart(trend_card)
         else:
-            ctk.CTkLabel(
-                body, text="Charts show all records, so only the Admin can see them.",
-                font=("Segoe UI", 11), text_color=MUTED
-            ).pack(anchor="w", padx=8, pady=10)
+            ctk.CTkLabel(body, text="Charts show all records, so only the Admin can see them.",
+                         font=("Segoe UI", 11), text_color=MUTED).pack(anchor="w", padx=8, pady=10)
 
         if not os.path.exists(DB_PATH):
             ctk.CTkLabel(
                 body, text="Database file not found yet. Run your existing BinGO program first to create bingo.db.",
-                text_color=RED, font=("Segoe UI", 11)
+                text_color=RED, font=("Segoe UI", 11),
             ).pack(anchor="w", padx=10, pady=8)
+
     def create_charts(self, bar_card, pie_card):
         figure = Figure(figsize=(6.3, 3.0), dpi=90, facecolor=WHITE)
         axis = figure.add_subplot(111)
         axis.set_facecolor(WHITE)
-        labels = []
-        quantities = []
 
         try:
             connection = get_connection()
-            cursor = connection.cursor()
-            cursor.execute("SELECT waste_type, quantity FROM waste_collections")
-            rows = cursor.fetchall()
+            rows = connection.execute("SELECT waste_type, quantity FROM waste_collections").fetchall()
             connection.close()
-            totals = {}
-            for waste_type, quantity in rows:
-                label = str(waste_type) if waste_type else "Unspecified"
-                try:
-                    amount = float(quantity)
-                except (TypeError, ValueError):
-                    amount = 0
-                totals[label] = totals.get(label, 0) + amount
-            labels = list(totals.keys())
-            quantities = list(totals.values())
         except sqlite3.Error:
-            labels = []
-            quantities = []
+            rows = []
 
-        if labels:
-            bars = axis.bar(labels, quantities, color=GREEN, width=0.62)
+        totals = {}
+        for waste_type, quantity in rows:
+            label = str(waste_type) if waste_type else "Unspecified"
+            try:
+                amount = float(quantity)
+            except (TypeError, ValueError):
+                amount = 0
+            totals[label] = totals.get(label, 0) + amount
+
+        if totals:
+            bars = axis.bar(list(totals.keys()), list(totals.values()), color=GREEN, width=0.62)
             axis.set_ylabel("Quantity (kg)", fontsize=9, color=MUTED)
             axis.tick_params(axis="x", labelrotation=25, labelsize=8, colors=MUTED)
             axis.tick_params(axis="y", labelsize=8, colors=MUTED)
@@ -476,7 +473,7 @@ class BinGOApp(ctk.CTk):
                     format(bar.get_height(), "g"),
                     (bar.get_x() + bar.get_width() / 2, bar.get_height()),
                     ha="center", va="bottom", fontsize=8, color=DARK_GREEN,
-                    xytext=(0, 3), textcoords="offset points"
+                    xytext=(0, 3), textcoords="offset points",
                 )
         else:
             axis.text(0.5, 0.5, "No collection data yet", ha="center", va="center", color=MUTED)
@@ -491,9 +488,9 @@ class BinGOApp(ctk.CTk):
         pie_axis = pie_figure.add_subplot(111)
         try:
             connection = get_connection()
-            cursor = connection.cursor()
-            cursor.execute("SELECT status, COUNT(*) FROM waste_collections GROUP BY status")
-            status_rows = cursor.fetchall()
+            status_rows = connection.execute(
+                "SELECT status, COUNT(*) FROM waste_collections GROUP BY status"
+            ).fetchall()
             connection.close()
         except sqlite3.Error:
             status_rows = []
@@ -506,7 +503,7 @@ class BinGOApp(ctk.CTk):
                 startangle=90, counterclock=False,
                 colors=["#0B8F70", "#75C9A8", "#F2C879", "#7FA8D8", "#DCE7E2"],
                 wedgeprops={"width": 0.42, "edgecolor": WHITE, "linewidth": 2},
-                pctdistance=0.78, textprops={"fontsize": 8, "color": TEXT}
+                pctdistance=0.78, textprops={"fontsize": 8, "color": TEXT},
             )
             pie_axis.set_aspect("equal")
         else:
@@ -518,18 +515,15 @@ class BinGOApp(ctk.CTk):
         pie_canvas.draw()
         pie_canvas.get_tk_widget().pack(fill="both", expand=True, padx=4, pady=4)
 
-
     def create_collection_trend_chart(self, trend_card):
-        """Draw a line graph showing total waste collected on each date."""
+        """Draw a line graph of the total waste collected on each date."""
         figure = Figure(figsize=(8.0, 2.7), dpi=90, facecolor=WHITE)
         axis = figure.add_subplot(111)
         axis.set_facecolor(WHITE)
 
         try:
             connection = get_connection()
-            cursor = connection.cursor()
-            cursor.execute("SELECT collection_date, quantity FROM waste_collections")
-            rows = cursor.fetchall()
+            rows = connection.execute("SELECT collection_date, quantity FROM waste_collections").fetchall()
             connection.close()
         except sqlite3.Error:
             rows = []
@@ -543,16 +537,13 @@ class BinGOApp(ctk.CTk):
                 amount = 0
             daily_totals[date_label] = daily_totals.get(date_label, 0) + amount
 
-        # Sort dates in DD/MM/YYYY format when possible; keep other labels safe.
-        from datetime import datetime
         def date_sort_key(label):
-            try:
-                return datetime.strptime(label, "%d/%m/%Y")
-            except ValueError:
+            for date_format in ("%d/%m/%Y", "%Y-%m-%d"):
                 try:
-                    return datetime.strptime(label, "%Y-%m-%d")
+                    return datetime.strptime(label, date_format)
                 except ValueError:
-                    return datetime.max
+                    pass
+            return datetime.max
 
         dates = sorted(daily_totals.keys(), key=date_sort_key)
         amounts = [daily_totals[date_label] for date_label in dates]
@@ -579,175 +570,176 @@ class BinGOApp(ctk.CTk):
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True, padx=8, pady=4)
 
+    # ---------- Record pages ----------
+
+    def filter_rows_for_role(self, page_name, columns, rows):
+        """Keep only the rows this login is allowed to see."""
+        if self.role == "Admin":
+            return rows
+
+        if self.role == "Customer" and page_name in ("Requests", "Billing"):
+            owner_index = columns.index("user_id")
+            return [row for row in rows if row[owner_index] == self.linked_id]
+
+        if self.role == "Service Provider":
+            if page_name in ("Waste Collections", "Scheduling"):
+                owner_index = columns.index("provider_id")
+                return [row for row in rows if row[owner_index] == self.linked_id]
+            if page_name == "Requests":
+                # Pending requests from this provider's city, plus accepted requests
+                # whose collection was deleted, so they can be accepted again.
+                city_index = columns.index("city_id")
+                status_index = columns.index("status")
+                id_index = columns.index("id")
+                provider_city = self.get_provider_city()
+                linked_ids = self.get_linked_request_ids()
+                return [
+                    row for row in rows
+                    if row[city_index] == provider_city
+                    and (row[status_index] == "Pending"
+                         or (row[status_index] == "Accepted" and row[id_index] not in linked_ids))
+                ]
+
+        return rows
+
+    def display_value(self, table_name, column, value):
+        """Show a friendly value. Provider cities show the name next to the ID."""
+        if value is None:
+            return ""
+        if table_name == "providers" and column == "city_id":
+            connection = get_connection()
+            row = connection.execute("SELECT name FROM cities WHERE id = ?", (value,)).fetchone()
+            connection.close()
+            if row:
+                return str(row[0]) + " (" + str(value) + ")"
+        return str(value)
+
+    def add_toolbar_button(self, toolbar, text, width, color, hover, command, text_color=WHITE):
+        ctk.CTkButton(
+            toolbar, text=text, width=width, height=32, fg_color=color, hover_color=hover,
+            text_color=text_color, command=command,
+        ).pack(side="right", padx=(8, 0))
+
     def show_module(self, page_name, search_text=""):
         self.clear_page()
         self.create_heading(page_name, "View records saved in your BinGO database.")
 
         if page_name not in MODULES:
-            ctk.CTkLabel(self.page_area, text="This section is not available yet.", text_color=MUTED).pack(pady=20)
+            ctk.CTkLabel(self.page_area, text="This section is not available yet.",
+                         text_color=MUTED).pack(pady=20)
             return
 
         table_name, columns = MODULES[page_name]
         self.selected_record = None
+        self.row_cells = []
+
         toolbar = ctk.CTkFrame(self.page_area, fg_color="transparent")
         toolbar.pack(fill="x", padx=8, pady=(0, 10))
-        ctk.CTkLabel(
-            toolbar, text="Total records: " + str(get_count(table_name)),
-            font=("Segoe UI", 12, "bold"), text_color=TEXT
-        ).pack(side="left", padx=(0, 10))
-        search_entry = ctk.CTkEntry(
-            toolbar, width=190, height=32, placeholder_text="Search records..."
-        )
+        ctk.CTkLabel(toolbar, text="Total records: " + str(get_count(table_name)),
+                     font=("Segoe UI", 12, "bold"), text_color=TEXT).pack(side="left", padx=(0, 10))
+
+        search_entry = ctk.CTkEntry(toolbar, width=190, height=32, placeholder_text="Search records...")
         search_entry.pack(side="left", padx=(0, 6))
         if search_text:
             search_entry.insert(0, search_text)
         ctk.CTkButton(
-            toolbar, text="🔍 Search", width=90, height=32,
-            fg_color=DARK_GREEN, hover_color=GREEN,
-            command=lambda: self.show_module(page_name, search_entry.get())
+            toolbar, text="🔍 Search", width=90, height=32, fg_color=DARK_GREEN, hover_color=GREEN,
+            command=lambda: self.show_module(page_name, search_entry.get()),
         ).pack(side="left", padx=(0, 6))
         ctk.CTkButton(
-            toolbar, text="Clear", width=60, height=32,
-            fg_color="#DDE5E2", hover_color="#C9D5D0", text_color=TEXT,
-            command=lambda: self.show_module(page_name)
+            toolbar, text="Clear", width=60, height=32, fg_color="#DDE5E2", hover_color="#C9D5D0",
+            text_color=TEXT, command=lambda: self.show_module(page_name),
         ).pack(side="left")
-        ctk.CTkButton(
-            toolbar, text="🔄️ Refresh", width=100, height=32,
-            fg_color=GREEN, hover_color=DARK_GREEN,
-            command=lambda: self.show_module(page_name, search_entry.get())
-        ).pack(side="right", padx=(8, 0))
-        ctk.CTkButton(
-            toolbar, text="⏬ Export CSV", width=110, height=32,
-            fg_color="#2878A5", hover_color="#205F83",
-            command=lambda: self.export_module_csv(page_name, search_entry.get())
-        ).pack(side="right", padx=(8, 0))
-        ctk.CTkButton(
-            toolbar, text="🚮 Delete Selected", width=135, height=32,
-            fg_color="#C94C4C", hover_color="#A93636",
-            command=lambda: self.delete_selected_record(page_name)
-        ).pack(side="right", padx=(8, 0))
-        ctk.CTkButton(
-            toolbar, text="🖋️ Update Selected", width=135, height=32,
-            fg_color="#D98C24", hover_color="#B87518",
-            command=lambda: self.open_update_form(page_name)
-        ).pack(side="right", padx=(8, 0))
-        ctk.CTkButton(
-            toolbar, text=" ➕ Add Record", width=120, height=32,
-            fg_color=DARK_GREEN, hover_color=GREEN,
-        
-            command=lambda: self.open_add_form(page_name)
-            ).pack(side="right")
-                # Customers can create their own requests from the Requests page.
+
+        # Buttons on the right side. The first one added sits furthest right.
+        self.add_toolbar_button(
+            toolbar, "🔄 Refresh", 100, GREEN, DARK_GREEN,
+            lambda: self.show_module(page_name, search_entry.get()))
+        self.add_toolbar_button(
+            toolbar, "⏬ Export CSV", 110, "#2878A5", "#205F83",
+            lambda: self.export_module_csv(page_name, search_entry.get()))
+
+        if self.role == "Admin":
+            self.add_toolbar_button(
+                toolbar, "🚮 Delete Selected", 135, "#C94C4C", "#A93636",
+                lambda: self.delete_selected_record(page_name))
+            self.add_toolbar_button(
+                toolbar, "🖋️ Update Selected", 135, "#D98C24", "#B87518",
+                lambda: self.open_update_form(page_name))
+            self.add_toolbar_button(
+                toolbar, "➕ Add Record", 120, DARK_GREEN, GREEN,
+                lambda: self.open_add_form(page_name))
+
         if self.role == "Customer" and page_name == "Requests":
-            ctk.CTkButton(
-                toolbar, text="➕ New Request", width=140, height=32,
-                fg_color=DARK_GREEN, hover_color=GREEN,
-                command=self.open_new_request_form
-            ).pack(side="right")
-                # Service providers can accept pending requests from their city.
+            self.add_toolbar_button(
+                toolbar, "➕ New Request", 140, DARK_GREEN, GREEN, self.open_new_request_form)
+
         if self.role == "Service Provider" and page_name == "Requests":
-            ctk.CTkButton(
-                toolbar, text="✅ Accept Request", width=150, height=32,
-                fg_color=DARK_GREEN, hover_color=GREEN,
-                command=self.accept_selected_request
-            ).pack(side="right")
-        # Only the Admin can change records. Other roles can still search, refresh and export.
-        if self.role != "Admin":
-            for widget in toolbar.winfo_children():
-                if isinstance(widget, ctk.CTkButton) and any(
-                    word in widget.cget("text")
-                    for word in ("Add Record", "Update Selected", "Delete Selected")
-                ):
-                    widget.destroy()
+            self.add_toolbar_button(
+                toolbar, "✅ Accept Request", 150, DARK_GREEN, GREEN, self.accept_selected_request)
+
+        if self.role == "Service Provider" and page_name == "Waste Collections":
+            self.add_toolbar_button(
+                toolbar, "✅ Mark Collected", 150, DARK_GREEN, GREEN, self.mark_selected_collected)
 
         table_frame = ctk.CTkScrollableFrame(
-            self.page_area, fg_color=WHITE, corner_radius=10,
-            border_width=1, border_color=BORDER
+            self.page_area, fg_color=WHITE, corner_radius=10, border_width=1, border_color=BORDER
         )
         table_frame.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
         try:
-            rows = get_rows(table_name, columns)
-            # Customers only see their own requests and bills.
-            if self.role == "Customer" and page_name in ("Requests", "Billing"):
-                owner_index = columns.index("user_id")
-                rows = [row for row in rows if row[owner_index] == self.linked_id]
-                        # Service providers see only pending requests from their own city.
-            if self.role == "Service Provider" and page_name == "Requests":
-                city_index = columns.index("city_id")
-                status_index = columns.index("status")
-                provider_city = self.get_provider_city()
-                rows = [
-                    row for row in rows
-                    if row[city_index] == provider_city and row[status_index] == "Pending"
-                ]
-            # Search every displayed column without changing the saved database data.
-        
-            if search_text:
-                search_value = search_text.lower()
-                rows = [
-                    row for row in rows
-                    if any(search_value in str(value).lower() for value in row if value is not None)
-                ]
+            rows = self.filter_rows_for_role(page_name, columns, get_rows(table_name, columns))
         except sqlite3.Error as error:
             ctk.CTkLabel(
                 table_frame,
                 text="Could not load this table. Make sure your BinGO database has been created.\n" + str(error),
-                text_color=RED, justify="left"
+                text_color=RED, justify="left",
             ).pack(anchor="w", padx=12, pady=15)
             return
+
+        if search_text:
+            rows = search_rows(rows, search_text)
 
         for column_index, column_name in enumerate(columns):
             table_frame.grid_columnconfigure(column_index, weight=1, uniform="table")
             ctk.CTkLabel(
                 table_frame, text=column_name.replace("_", " ").title(),
                 font=("Segoe UI", 11, "bold"), text_color=WHITE,
-                fg_color=DARK_GREEN, corner_radius=4, padx=8, pady=8
+                fg_color=DARK_GREEN, corner_radius=4, padx=8, pady=8,
             ).grid(row=0, column=column_index, sticky="ew", padx=2, pady=2)
 
         if not rows:
-            ctk.CTkLabel(
-                table_frame, text="No matching records found.",
-                font=("Segoe UI", 12), text_color=MUTED
-            ).grid(row=1, column=0, columnspan=len(columns), sticky="w", padx=12, pady=20)
+            ctk.CTkLabel(table_frame, text="No matching records found.",
+                         font=("Segoe UI", 12), text_color=MUTED
+                         ).grid(row=1, column=0, columnspan=len(columns), sticky="w", padx=12, pady=20)
             return
 
         for row_index, row_data in enumerate(rows, start=1):
+            cells = []
             for column_index, value in enumerate(row_data):
-                displayed_value = value
-
-                # In the Service Providers table, show the city name and ID together.
-                # The database continues to store only the City ID, such as C001.
-                if table_name == "providers" and columns[column_index] == "city_id" and value is not None:
-                    connection = None
-                    try:
-                        connection = get_connection()
-                        cursor = connection.cursor()
-                        cursor.execute("SELECT name FROM cities WHERE id = ?", (value,))
-                        city_row = cursor.fetchone()
-                        if city_row:
-                            displayed_value = str(city_row[0]) + " (" + str(value) + ")"
-                    except sqlite3.Error:
-                        displayed_value = value
-                    finally:
-                        if connection is not None:
-                            connection.close()
-
                 cell = ctk.CTkLabel(
-                    table_frame, text="" if displayed_value is None else str(displayed_value),
+                    table_frame,
+                    text=self.display_value(table_name, columns[column_index], value),
                     font=("Segoe UI", 10), text_color=TEXT,
-                    fg_color="#F6FAF8" if row_index % 2 == 1 else WHITE,
-                    corner_radius=3, padx=8, pady=8, anchor="w"
+                    fg_color=row_stripe(row_index), corner_radius=3, padx=8, pady=8, anchor="w",
                 )
                 cell.grid(row=row_index, column=column_index, sticky="ew", padx=2, pady=2)
-                cell.bind(
-                    "<Button-1>",
-                    lambda event, record=row_data, row=row_index: self.select_record(record, row, table_frame, columns)
-                )
+                cell.bind("<Button-1>",
+                          lambda event, record=row_data, index=row_index: self.select_record(record, index))
                 cell.configure(cursor="hand2")
+                cells.append(cell)
+            self.row_cells.append(cells)
+
+    def select_record(self, record, row_index):
+        """Remember the clicked row and highlight it."""
+        self.selected_record = record
+        for index, cells in enumerate(self.row_cells, start=1):
+            color = LIGHT_GREEN if index == row_index else row_stripe(index)
+            for cell in cells:
+                cell.configure(fg_color=color)
 
     def export_module_csv(self, page_name, search_text=""):
-        """Export the selected module's records to a CSV file."""
+        """Export the rows this login can see to a CSV file."""
         if page_name not in MODULES:
             return
 
@@ -758,81 +750,41 @@ class BinGOApp(ctk.CTk):
             title="Export " + page_name + " Report",
             defaultextension=".csv",
             initialfile=default_name,
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
         )
         if not file_path:
             return
 
-        connection = None
         try:
-            connection = get_connection()
-            cursor = connection.cursor()
-            column_text = ", ".join('"' + column + '"' for column in columns)
-            cursor.execute("SELECT " + column_text + " FROM \"" + table_name + "\"")
-            rows = cursor.fetchall()
-
-            # Customers only export their own requests and bills.
-            if self.role == "Customer" and page_name in ("Requests", "Billing"):
-                owner_index = columns.index("user_id")
-                rows = [row for row in rows if row[owner_index] == self.linked_id]
-
-           
+            rows = self.filter_rows_for_role(page_name, columns, get_rows(table_name, columns))
             if search_text:
-                search_value = search_text.lower()
-                rows = [
-                    row for row in rows
-                    if any(search_value in str(value).lower() for value in row if value is not None)
-                ]
+                rows = search_rows(rows, search_text)
 
             with open(file_path, "w", newline="", encoding="utf-8-sig") as csv_file:
                 writer = csv.writer(csv_file)
                 writer.writerow([column.replace("_", " ").title() for column in columns])
                 writer.writerows(rows)
 
-            messagebox.showinfo(
-                "Export Successful",
-                str(len(rows)) + " record(s) exported to:\n" + file_path,
-                parent=self
-            )
+            messagebox.showinfo("Export Successful",
+                                str(len(rows)) + " record(s) exported to:\n" + file_path, parent=self)
         except (sqlite3.Error, OSError, csv.Error) as error:
-            messagebox.showerror(
-                "Export Failed", "Could not export the report:\n" + str(error), parent=self
-            )
-        finally:
-            if connection is not None:
-                connection.close()
-
-    def select_record(self, record, row_index, table_frame, columns):
-        """Remember the row clicked by the user and highlight it."""
-        self.selected_record = record
-        for widget in table_frame.winfo_children():
-            info = widget.grid_info()
-            if str(info.get("row")) != "0":
-                widget.configure(fg_color=WHITE if int(info.get("row", 0)) % 2 == 0 else "#F6FAF8")
-        for widget in table_frame.winfo_children():
-            info = widget.grid_info()
-            if str(info.get("row")) == str(row_index):
-                widget.configure(fg_color=LIGHT_GREEN)
+            messagebox.showerror("Export Failed", "Could not export the report:\n" + str(error), parent=self)
 
     def delete_selected_record(self, page_name):
-        """Delete the selected database record after confirmation."""
+        """Delete the selected record after confirmation. Admin only."""
         if page_name not in MODULES:
             return
-
         if self.selected_record is None:
-            messagebox.showwarning(
-                "Select a Record",
-                "Click a record row in the table first, then click Delete Selected."
-            )
+            messagebox.showwarning("Select a Record",
+                                   "Click a record row in the table first, then click Delete Selected.")
             return
 
         table_name, columns = MODULES[page_name]
         record_id = self.selected_record[0]
-
         confirmed = messagebox.askyesno(
             "Confirm Delete",
-            "Are you sure you want to delete this record?\n\nRecord ID: " + str(record_id) +
-            "\n\nThis action cannot be undone."
+            "Are you sure you want to delete this record?\n\nRecord ID: " + str(record_id)
+            + "\n\nThis action cannot be undone.",
         )
         if not confirmed:
             return
@@ -841,19 +793,14 @@ class BinGOApp(ctk.CTk):
         try:
             connection = get_connection()
             cursor = connection.cursor()
-            cursor.execute(
-                "DELETE FROM \"" + table_name + "\" WHERE \"id\" = ?",
-                (record_id,)
-            )
+            cursor.execute('DELETE FROM "' + table_name + '" WHERE "id" = ?', (record_id,))
             if cursor.rowcount == 0:
                 messagebox.showwarning("Not Found", "This record no longer exists.")
             else:
                 connection.commit()
                 messagebox.showinfo("Success", "Record deleted successfully!")
         except sqlite3.Error as error:
-            messagebox.showerror(
-                "Database Error", "Could not delete the record:\n" + str(error)
-            )
+            messagebox.showerror("Database Error", "Could not delete the record:\n" + str(error))
         finally:
             if connection is not None:
                 connection.close()
@@ -862,18 +809,16 @@ class BinGOApp(ctk.CTk):
         self.show_module(page_name)
 
     def open_update_form(self, page_name):
-        """Open an edit form for the row selected in the records table."""
+        """Open an edit form for the selected record. Admin only."""
         if page_name not in MODULES:
             return
         if self.selected_record is None:
-            messagebox.showwarning(
-                "Select a Record", "Click a record row in the table first, then click Update Selected."
-            )
+            messagebox.showwarning("Select a Record",
+                                   "Click a record row in the table first, then click Update Selected.")
             return
 
         table_name, columns = MODULES[page_name]
-        original_record = self.selected_record
-        record_values = dict(zip(columns, original_record))
+        record_values = dict(zip(columns, self.selected_record))
         record_id = record_values.get("id")
 
         form = ctk.CTkToplevel(self)
@@ -884,13 +829,10 @@ class BinGOApp(ctk.CTk):
         form.transient(self)
         form.grab_set()
 
-        ctk.CTkLabel(
-            form, text="Update Record", font=("Segoe UI", 22, "bold"), text_color=TEXT
-        ).pack(anchor="w", padx=24, pady=(20, 2))
-        ctk.CTkLabel(
-            form, text="Change the details and click Save Changes. The record ID cannot be changed.",
-            font=("Segoe UI", 11), text_color=MUTED
-        ).pack(anchor="w", padx=24, pady=(0, 12))
+        ctk.CTkLabel(form, text="Update Record", font=("Segoe UI", 22, "bold"),
+                     text_color=TEXT).pack(anchor="w", padx=24, pady=(20, 2))
+        ctk.CTkLabel(form, text="Change the details and click Save Changes. The record ID cannot be changed.",
+                     font=("Segoe UI", 11), text_color=MUTED).pack(anchor="w", padx=24, pady=(0, 12))
 
         form_fields = ctk.CTkScrollableFrame(form, fg_color=WHITE, corner_radius=10)
         form_fields.pack(fill="both", expand=True, padx=20, pady=(0, 12))
@@ -898,36 +840,31 @@ class BinGOApp(ctk.CTk):
         entry_maps = {}
 
         for column in columns:
-            ctk.CTkLabel(
-                form_fields, text=(column.replace("_", " ").title() + (" (automatic)" if column == "id" else "")),
-                font=("Segoe UI", 11, "bold"), text_color=TEXT
-            ).pack(anchor="w", padx=14, pady=(10, 3))
+            label = column.replace("_", " ").title() + (" (automatic)" if column == "id" else "")
+            ctk.CTkLabel(form_fields, text=label, font=("Segoe UI", 11, "bold"),
+                         text_color=TEXT).pack(anchor="w", padx=14, pady=(10, 3))
             value = record_values.get(column)
             options = get_reference_options(table_name, column)
+
             if column == "id":
                 entry = ctk.CTkEntry(form_fields, height=34)
                 entry.pack(fill="x", padx=14, pady=(0, 3))
                 entry.insert(0, "" if value is None else str(value))
                 entry.configure(state="disabled")
-                entries[column] = entry
                 entry_maps[column] = None
             elif options is not None:
-                entry = ctk.CTkComboBox(form_fields, height=34, values=list(options.keys()))
+                entry = ctk.CTkOptionMenu(form_fields, height=34, values=list(options.keys()))
                 entry.pack(fill="x", padx=14, pady=(0, 3))
-                selected_label = next((label for label, stored in options.items() if stored == str(value)), "")
-                if selected_label:
-                    entry.set(selected_label)
-                elif options:
-                    entry.set(list(options.keys())[0])
-                entries[column] = entry
+                selected_label = next((text for text, stored in options.items() if stored == str(value)), "")
+                entry.set(selected_label or (list(options.keys())[0] if options else ""))
                 entry_maps[column] = options
             else:
                 entry = ctk.CTkEntry(form_fields, height=34)
                 entry.pack(fill="x", padx=14, pady=(0, 3))
                 if value is not None:
                     entry.insert(0, str(value))
-                entries[column] = entry
                 entry_maps[column] = None
+            entries[column] = entry
 
         def get_field_value(column):
             displayed_value = entries[column].get()
@@ -939,53 +876,49 @@ class BinGOApp(ctk.CTk):
         def save_changes():
             update_columns = [column for column in columns if column != "id"]
             values = [get_field_value(column) for column in update_columns]
-            empty_fields = [column.replace("_", " ").title() for column, value in zip(update_columns, values) if value == ""]
-            if empty_fields:
-                messagebox.showwarning(
-                    "Missing Information", "Please fill in all fields:\n" + ", ".join(empty_fields), parent=form
-                )
+            empty = [column.replace("_", " ").title()
+                     for column, value in zip(update_columns, values) if value == ""]
+            if empty:
+                messagebox.showwarning("Missing Information",
+                                       "Please fill in all fields:\n" + ", ".join(empty), parent=form)
                 return
 
             set_clause = ", ".join('"' + column + '" = ?' for column in update_columns)
+            saved = False
+            connection = None
             try:
                 connection = get_connection()
                 cursor = connection.cursor()
                 cursor.execute(
-                    "UPDATE \"" + table_name + "\" SET " + set_clause + " WHERE \"id\" = ?",
-                    values + [record_id]
+                    'UPDATE "' + table_name + '" SET ' + set_clause + ' WHERE "id" = ?',
+                    values + [record_id],
                 )
                 if cursor.rowcount == 0:
-                    connection.close()
                     messagebox.showwarning("Not Found", "This record no longer exists.", parent=form)
-                    form.destroy()
-                    self.show_module(page_name)
-                    return
-                connection.commit()
-                connection.close()
+                else:
+                    connection.commit()
+                    saved = True
+            except sqlite3.Error as error:
+                messagebox.showerror("Database Error", "Could not update the record:\n" + str(error), parent=form)
+            finally:
+                if connection is not None:
+                    connection.close()
+
+            if saved:
                 messagebox.showinfo("Success", "Record updated successfully!", parent=form)
                 form.destroy()
                 self.show_module(page_name)
-            except sqlite3.Error as error:
-                try:
-                    connection.close()
-                except Exception:
-                    pass
-                messagebox.showerror("Database Error", "Could not update the record:\n" + str(error), parent=form)
 
         buttons = ctk.CTkFrame(form, fg_color="transparent")
         buttons.pack(fill="x", padx=20, pady=(0, 18))
-        ctk.CTkButton(
-            buttons, text="Cancel", width=100, height=38,
-            fg_color="#DDE5E2", hover_color="#C9D5D0", text_color=TEXT,
-            command=form.destroy
-        ).pack(side="right", padx=(8, 0))
-        ctk.CTkButton(
-            buttons, text="Save Changes", width=130, height=38,
-            fg_color=GREEN, hover_color=DARK_GREEN, command=save_changes
-        ).pack(side="right")
+        ctk.CTkButton(buttons, text="Cancel", width=100, height=38, fg_color="#DDE5E2",
+                      hover_color="#C9D5D0", text_color=TEXT, command=form.destroy
+                      ).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(buttons, text="Save Changes", width=130, height=38, fg_color=GREEN,
+                      hover_color=DARK_GREEN, command=save_changes).pack(side="right")
 
     def open_add_form(self, page_name):
-        """Open a simple form to insert a record into the selected database table."""
+        """Open a form to add a record. Admin only."""
         if page_name not in MODULES:
             return
 
@@ -1001,14 +934,10 @@ class BinGOApp(ctk.CTk):
         form.focus_force()
         form.grab_set()
 
-        ctk.CTkLabel(
-            form, text="Add New Record", font=("Segoe UI", 22, "bold"),
-            text_color=TEXT
-        ).pack(anchor="w", padx=24, pady=(20, 2))
-        ctk.CTkLabel(
-            form, text="Enter the details below and click Save Record.",
-            font=("Segoe UI", 11), text_color=MUTED
-        ).pack(anchor="w", padx=24, pady=(0, 12))
+        ctk.CTkLabel(form, text="Add New Record", font=("Segoe UI", 22, "bold"),
+                     text_color=TEXT).pack(anchor="w", padx=24, pady=(20, 2))
+        ctk.CTkLabel(form, text="Enter the details below and click Save Record.",
+                     font=("Segoe UI", 11), text_color=MUTED).pack(anchor="w", padx=24, pady=(0, 12))
 
         form_fields = ctk.CTkScrollableFrame(form, fg_color=WHITE, corner_radius=10)
         form_fields.pack(fill="both", expand=True, padx=20, pady=(0, 12))
@@ -1017,37 +946,29 @@ class BinGOApp(ctk.CTk):
         generated_id = generate_id(table_name)
 
         for column in columns:
-            label_text = column.replace("_", " ").title()
-            if column == "id":
-                label_text += " (automatic)"
-            ctk.CTkLabel(
-                form_fields, text=label_text,
-                font=("Segoe UI", 11, "bold"), text_color=TEXT
-            ).pack(anchor="w", padx=14, pady=(10, 3))
+            label = column.replace("_", " ").title() + (" (automatic)" if column == "id" else "")
+            ctk.CTkLabel(form_fields, text=label, font=("Segoe UI", 11, "bold"),
+                         text_color=TEXT).pack(anchor="w", padx=14, pady=(10, 3))
             options = get_reference_options(table_name, column)
+
             if column == "id":
                 entry = ctk.CTkEntry(form_fields, height=34)
                 entry.pack(fill="x", padx=14, pady=(0, 3))
                 entry.insert(0, generated_id)
                 entry.configure(state="disabled")
-                entries[column] = entry
                 entry_maps[column] = None
             elif options is not None:
-                entry = ctk.CTkComboBox(form_fields, height=34, values=list(options.keys()))
+                entry = ctk.CTkOptionMenu(form_fields, height=34,
+                                          values=list(options.keys()) or ["No records available"])
                 entry.pack(fill="x", padx=14, pady=(0, 3))
-                if options:
-                    entry.set(list(options.keys())[0])
-                else:
-                    entry.set("No records available")
-                entries[column] = entry
+                entry.set(list(options.keys())[0] if options else "No records available")
                 entry_maps[column] = options
             else:
-                entry = ctk.CTkEntry(
-                    form_fields, height=34, placeholder_text="Enter " + column.replace("_", " ")
-                )
+                entry = ctk.CTkEntry(form_fields, height=34,
+                                     placeholder_text="Enter " + column.replace("_", " "))
                 entry.pack(fill="x", padx=14, pady=(0, 3))
-                entries[column] = entry
                 entry_maps[column] = None
+            entries[column] = entry
 
         def get_field_value(column):
             displayed_value = entries[column].get()
@@ -1058,62 +979,48 @@ class BinGOApp(ctk.CTk):
 
         def save_record():
             values = [get_field_value(column) for column in columns]
-            empty_fields = []
-            for column, value in zip(columns, values):
-                if value == "":
-                    empty_fields.append(column.replace("_", " ").title())
-
-            if empty_fields:
-                messagebox.showwarning(
-                    "Missing Information",
-                    "Please fill in all fields:\n" + ", ".join(empty_fields),
-                    parent=form
-                )
+            empty = [column.replace("_", " ").title() for column, value in zip(columns, values) if value == ""]
+            if empty:
+                messagebox.showwarning("Missing Information",
+                                       "Please fill in all fields:\n" + ", ".join(empty), parent=form)
                 return
 
             column_text = ", ".join('"' + column + '"' for column in columns)
-            placeholders = ", ".join("?" for column in columns)
+            placeholders = ", ".join("?" for _ in columns)
+            saved = False
+            connection = None
             try:
                 connection = get_connection()
-                cursor = connection.cursor()
-                cursor.execute(
-                    "INSERT INTO \"" + table_name + "\" (" + column_text + ") VALUES (" + placeholders + ")",
-                    values
+                connection.execute(
+                    'INSERT INTO "' + table_name + '" (' + column_text + ") VALUES (" + placeholders + ")",
+                    values,
                 )
                 connection.commit()
-                connection.close()
+                saved = True
+            except sqlite3.IntegrityError:
+                messagebox.showerror("Duplicate Record",
+                                     "This generated ID already exists. Close the form and try again.",
+                                     parent=form)
+            except sqlite3.Error as error:
+                messagebox.showerror("Database Error", "Could not save the record:\n" + str(error), parent=form)
+            finally:
+                if connection is not None:
+                    connection.close()
+
+            if saved:
                 messagebox.showinfo("Success", "Record added successfully!", parent=form)
                 form.destroy()
                 self.show_module(page_name)
-            except sqlite3.IntegrityError:
-                try:
-                    connection.close()
-                except Exception:
-                    pass
-                messagebox.showerror(
-                    "Duplicate Record", "This generated ID already exists. Refresh the form and try again.",
-                    parent=form
-                )
-            except sqlite3.Error as error:
-                try:
-                    connection.close()
-                except Exception:
-                    pass
-                messagebox.showerror(
-                    "Database Error", "Could not save the record:\n" + str(error), parent=form
-                )
 
         buttons = ctk.CTkFrame(form, fg_color="transparent")
         buttons.pack(fill="x", padx=20, pady=(0, 18))
-        ctk.CTkButton(
-            buttons, text="Cancel", width=100, height=38,
-            fg_color="#DDE5E2", hover_color="#C9D5D0", text_color=TEXT,
-            command=form.destroy
-        ).pack(side="right", padx=(8, 0))
-        ctk.CTkButton(
-            buttons, text="Save Record", width=130, height=38,
-            fg_color=GREEN, hover_color=DARK_GREEN, command=save_record
-        ).pack(side="right")
+        ctk.CTkButton(buttons, text="Cancel", width=100, height=38, fg_color="#DDE5E2",
+                      hover_color="#C9D5D0", text_color=TEXT, command=form.destroy
+                      ).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(buttons, text="Save Record", width=130, height=38, fg_color=GREEN,
+                      hover_color=DARK_GREEN, command=save_record).pack(side="right")
+
+    # ---------- Service provider actions ----------
 
     def get_provider_city(self):
         """Return the city ID saved on this service provider's profile."""
@@ -1124,8 +1031,17 @@ class BinGOApp(ctk.CTk):
         connection.close()
         return row[0] if row else None
 
+    def get_linked_request_ids(self):
+        """Return the request IDs that already have a collection."""
+        connection = get_connection()
+        rows = connection.execute(
+            'SELECT "request_id" FROM "waste_collections" WHERE "request_id" IS NOT NULL'
+        ).fetchall()
+        connection.close()
+        return {row[0] for row in rows}
+
     def accept_selected_request(self):
-        """Service provider accepts a pending request. The new collection remembers the request."""
+        """Accept a pending request, or an accepted one whose collection was deleted."""
         if self.selected_record is None:
             messagebox.showwarning("Select a Request", "Click a request row first, then click Accept Request.")
             return
@@ -1138,8 +1054,8 @@ class BinGOApp(ctk.CTk):
         area_id = self.selected_record[columns.index("area_id")]
         preferred_date = self.selected_record[columns.index("preferred_date")]
         status = self.selected_record[columns.index("status")]
-        if status != "Pending":
-            messagebox.showwarning("Not Available", "This request is no longer pending.")
+        if status not in ("Pending", "Accepted"):
+            messagebox.showwarning("Not Available", "This request can't be accepted.")
             return
 
         collection_id = generate_id("waste_collections")
@@ -1147,10 +1063,13 @@ class BinGOApp(ctk.CTk):
         try:
             connection = get_connection()
             cursor = connection.cursor()
-            # Only update if the request is still Pending, so two providers can't both accept it.
+            # Accept only if the request is Pending, or Accepted with no collection left.
+            # The check and the update happen in one step, so two providers can't both win.
             cursor.execute(
-                'UPDATE "requests" SET "status" = ? WHERE "id" = ? AND "status" = ?',
-                ("Accepted", request_id, "Pending"),
+                'UPDATE "requests" SET "status" = ? WHERE "id" = ? AND ("status" = ? OR '
+                '("status" = ? AND "id" NOT IN (SELECT "request_id" FROM "waste_collections" '
+                'WHERE "request_id" IS NOT NULL)))',
+                ("Accepted", request_id, "Pending", "Accepted"),
             )
             if cursor.rowcount == 0:
                 connection.rollback()
@@ -1164,7 +1083,8 @@ class BinGOApp(ctk.CTk):
                      self.linked_id, preferred_date, "Assigned", request_id),
                 )
                 connection.commit()
-                messagebox.showinfo("Accepted", "Request " + request_id + " accepted. Collection " + collection_id + " was created.")
+                messagebox.showinfo("Accepted", "Request " + request_id + " accepted. Collection "
+                                    + collection_id + " was created.")
         except sqlite3.Error as error:
             if connection is not None:
                 connection.rollback()
@@ -1179,21 +1099,23 @@ class BinGOApp(ctk.CTk):
     def mark_selected_collected(self):
         """Mark an Assigned collection as Collected, and its request as Completed."""
         if self.selected_record is None:
-            messagebox.showwarning("Select a Collection", "Click a collection row first, then click Mark Collected.")
+            messagebox.showwarning("Select a Collection",
+                                   "Click a collection row first, then click Mark Collected.")
             return
 
         columns = MODULES["Waste Collections"][1]
         collection_id = self.selected_record[columns.index("id")]
         status = self.selected_record[columns.index("status")]
         if status != "Assigned":
-            messagebox.showwarning("Not Available", "Only collections with status Assigned can be marked Collected.")
+            messagebox.showwarning("Not Available",
+                                   "Only collections with status Assigned can be marked Collected.")
             return
 
         connection = None
         try:
             connection = get_connection()
             cursor = connection.cursor()
-            # The provider_id check makes sure a provider can only change their own collections.
+            # The provider_id check means a provider can only change their own collections.
             cursor.execute(
                 'SELECT "request_id" FROM "waste_collections" WHERE "id" = ? AND "provider_id" = ?',
                 (collection_id, self.linked_id),
@@ -1210,10 +1132,8 @@ class BinGOApp(ctk.CTk):
                     ("Collected", collection_id, self.linked_id, "Assigned"),
                 )
                 if request_id:  # Older collections have no linked request.
-                    cursor.execute(
-                        'UPDATE "requests" SET "status" = ? WHERE "id" = ?',
-                        ("Completed", request_id),
-                    )
+                    cursor.execute('UPDATE "requests" SET "status" = ? WHERE "id" = ?',
+                                   ("Completed", request_id))
                 connection.commit()
                 messagebox.showinfo("Collected", "Collection " + collection_id + " is marked as Collected.")
         except sqlite3.Error as error:
@@ -1227,35 +1147,46 @@ class BinGOApp(ctk.CTk):
         self.selected_record = None
         self.show_module("Waste Collections")
 
-    def open_new_request_form(self):
-        from datetime import datetime
+    # ---------- Customer actions ----------
 
+    def open_new_request_form(self):
+        """Customer creates a pickup request. Every field is a choice from a list."""
         connection = get_connection()
-        cursor = connection.cursor()
-        cursor.execute("SELECT DISTINCT state FROM cities WHERE state IS NOT NULL AND state != '' ORDER BY state")
-        states = [row[0] for row in cursor.fetchall()]
-        cursor.execute("SELECT id, name, state FROM cities ORDER BY name")
-        all_cities = cursor.fetchall()
-        cursor.execute("SELECT id, name FROM waste_types ORDER BY name")
-        waste_rows = cursor.fetchall()
+        city_rows = connection.execute(
+            "SELECT id, name, state FROM cities ORDER BY state, name").fetchall()
+        waste_rows = connection.execute("SELECT id, name FROM waste_types ORDER BY name").fetchall()
         connection.close()
 
-        if not states:
+        if not city_rows:
             messagebox.showwarning("No Cities", "The admin needs to add cities in City Management first.", parent=self)
             return
         if not waste_rows:
             messagebox.showwarning("No Waste Types", "The admin needs to add waste types first.", parent=self)
             return
 
-        # Each state maps to its own cities, so the city list changes when the state changes.
-        city_map = {}
-        for city_id, name, state in all_cities:
-            city_map.setdefault(state, {})[name + " (" + str(city_id) + ")"] = city_id
-        waste_map = {name + " (" + str(waste_id) + ")": waste_id for waste_id, name in waste_rows}
+        # state -> {city label -> city ID}. Labels are plain names, like "Amritsar".
+        state_map = {}
+        for city_id, name, state in city_rows:
+            city_map = state_map.setdefault(state or "Other", {})
+            label = name
+            if label in city_map:
+                label = name + " (" + str(city_id) + ")"
+            city_map[label] = city_id
+
+        # waste type label -> waste type ID
+        waste_map = {}
+        for waste_id, name in waste_rows:
+            label = name
+            if label in waste_map:
+                label = name + " (" + str(waste_id) + ")"
+            waste_map[label] = waste_id
+
+        state_names = [SELECT_TEXT] + sorted(state_map.keys())
+        waste_names = [SELECT_TEXT] + list(waste_map.keys())
 
         form = ctk.CTkToplevel(self)
         form.title("New Pickup Request")
-        form.geometry("480x660")
+        form.geometry("480x700")
         form.configure(fg_color=BACKGROUND)
         form.transient(self)
         form.update_idletasks()
@@ -1265,7 +1196,7 @@ class BinGOApp(ctk.CTk):
 
         ctk.CTkLabel(form, text="New Pickup Request", font=("Segoe UI", 22, "bold"),
                      text_color=TEXT).pack(anchor="w", padx=24, pady=(20, 2))
-        ctk.CTkLabel(form, text="Your request will be saved as Pending.",
+        ctk.CTkLabel(form, text="Pick from each list. Your request will be saved as Pending.",
                      font=("Segoe UI", 11), text_color=MUTED).pack(anchor="w", padx=24, pady=(0, 12))
 
         fields = ctk.CTkFrame(form, fg_color=WHITE, corner_radius=10)
@@ -1275,26 +1206,26 @@ class BinGOApp(ctk.CTk):
             ctk.CTkLabel(fields, text=text, font=("Segoe UI", 11, "bold"),
                          text_color=TEXT).pack(anchor="w", padx=14, pady=(10, 3))
 
+        def refresh_cities(chosen_state):
+            """When the state changes, show only that state's cities."""
+            options = [SELECT_TEXT] + list(state_map.get(chosen_state, {}).keys())
+            city_box.configure(values=options)
+            city_box.set(SELECT_TEXT)
+
         add_label("State")
-        state_box = ctk.CTkComboBox(fields, height=34, values=states)
-        state_box.set(states[0])
+        state_box = ctk.CTkOptionMenu(fields, height=34, values=state_names,
+                                      command=lambda chosen: refresh_cities(chosen))
+        state_box.set(SELECT_TEXT)
         state_box.pack(fill="x", padx=14)
 
         add_label("City")
-        city_box = ctk.CTkComboBox(fields, height=34, values=[])
+        city_box = ctk.CTkOptionMenu(fields, height=34, values=[SELECT_TEXT])
+        city_box.set(SELECT_TEXT)
         city_box.pack(fill="x", padx=14)
 
-        def refresh_cities(chosen_state):
-            options = list(city_map.get(chosen_state, {}).keys())
-            city_box.configure(values=options)
-            city_box.set(options[0] if options else "")
-
-        state_box.configure(command=refresh_cities)
-        refresh_cities(states[0])
-
         add_label("Waste type")
-        waste_box = ctk.CTkComboBox(fields, height=34, values=list(waste_map.keys()))
-        waste_box.set(list(waste_map.keys())[0])
+        waste_box = ctk.CTkOptionMenu(fields, height=34, values=waste_names)
+        waste_box.set(SELECT_TEXT)
         waste_box.pack(fill="x", padx=14)
 
         add_label("Quantity (kg)")
@@ -1309,33 +1240,34 @@ class BinGOApp(ctk.CTk):
         area_entry = ctk.CTkEntry(fields, height=34, placeholder_text="e.g. Sector 14")
         area_entry.pack(fill="x", padx=14, pady=(0, 10))
 
-        message = ctk.CTkLabel(form, text="", font=("Segoe UI", 11),
-                               text_color=RED, wraplength=430)
+        message = ctk.CTkLabel(form, text="", font=("Segoe UI", 11), text_color=RED, wraplength=430)
         message.pack(pady=(0, 6))
 
         def save_request():
-            city_id = city_map.get(state_box.get(), {}).get(city_box.get())
+            city_id = state_map.get(state_box.get(), {}).get(city_box.get())
             waste_id = waste_map.get(waste_box.get())
             quantity_text = quantity_entry.get().strip()
             date_text = date_entry.get().strip()
             area_text = area_entry.get().strip()
 
+            error = None
             if city_id is None:
-                message.configure(text="Choose a city from the list.")
-                return
-            if waste_id is None:
-                message.configure(text="Choose a waste type from the list.")
-                return
-            try:
-                if float(quantity_text) <= 0:
-                    raise ValueError
-            except ValueError:
-                message.configure(text="Quantity must be a number greater than 0.")
-                return
-            try:
-                datetime.strptime(date_text, "%d/%m/%Y")
-            except ValueError:
-                message.configure(text="Enter the date as DD/MM/YYYY, like 05/11/2026.")
+                error = "Choose a state and a city from the lists."
+            elif waste_id is None:
+                error = "Choose a waste type from the list."
+            else:
+                try:
+                    if float(quantity_text) <= 0:
+                        raise ValueError
+                except ValueError:
+                    error = "Quantity must be a number greater than 0."
+            if error is None:
+                try:
+                    datetime.strptime(date_text, "%d/%m/%Y")
+                except ValueError:
+                    error = "Enter the date as DD/MM/YYYY, like 05/11/2026."
+            if error:
+                message.configure(text=error)
                 return
 
             request_id = generate_id("requests")
@@ -1350,27 +1282,28 @@ class BinGOApp(ctk.CTk):
                      city_id, area_text, date_text, "Pending"),
                 )
                 connection.commit()
-                connection.close()
-                messagebox.showinfo("Request Sent",
-                                    "Your request " + request_id + " was saved as Pending.",
-                                    parent=form)
-                form.destroy()
-                self.show_module("Requests")
-            except sqlite3.Error as error:
+                saved = True
+            except sqlite3.Error as save_error:
+                message.configure(text="Could not save the request: " + str(save_error))
+                saved = False
+            finally:
                 if connection is not None:
                     connection.close()
-                message.configure(text="Could not save the request: " + str(error))
+
+            if saved:
+                messagebox.showinfo("Request Sent",
+                                    "Your request " + request_id + " was saved as Pending.", parent=form)
+                form.destroy()
+                self.show_module("Requests")
 
         buttons = ctk.CTkFrame(form, fg_color="transparent")
         buttons.pack(fill="x", padx=20, pady=(0, 18))
-        ctk.CTkButton(buttons, text="Cancel", width=100, height=38,
-                      fg_color="#DDE5E2", hover_color="#C9D5D0", text_color=TEXT,
-                      command=form.destroy).pack(side="right", padx=(8, 0))
-        ctk.CTkButton(buttons, text="Send Request", width=140, height=38,
-                      fg_color=GREEN, hover_color=DARK_GREEN,
-                      command=save_request).pack(side="right")
+        ctk.CTkButton(buttons, text="Cancel", width=100, height=38, fg_color="#DDE5E2",
+                      hover_color="#C9D5D0", text_color=TEXT, command=form.destroy
+                      ).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(buttons, text="Send Request", width=140, height=38, fg_color=GREEN,
+                      hover_color=DARK_GREEN, command=save_request).pack(side="right")
 
     def confirm_exit(self):
-        if messagebox.askyesno("Exit", "Are you sure you want to exit?", parent=self):
+        if messagebox.askyesno("Exit BinGO", "Are you sure you want to close BinGO?"):
             self.destroy()
-            
