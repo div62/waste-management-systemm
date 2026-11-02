@@ -22,7 +22,6 @@ USERNAME_PATTERN = r"[A-Za-z0-9_]{3,20}"
 PHONE_PATTERN = r"\d{10}"
 
 CITY_DATA = [
-    # Punjab
     ("Amritsar", "Punjab"),
     ("Barnala", "Punjab"),
     ("Bathinda", "Punjab"),
@@ -46,9 +45,7 @@ CITY_DATA = [
     ("Rupnagar", "Punjab"),
     ("Sangrur", "Punjab"),
     ("Tarn Taran", "Punjab"),
-    # Chandigarh
     ("Chandigarh", "Chandigarh"),
-    # Haryana
     ("Ambala", "Haryana"),
     ("Bhiwani", "Haryana"),
     ("Faridabad", "Haryana"),
@@ -64,7 +61,6 @@ CITY_DATA = [
     ("Sirsa", "Haryana"),
     ("Sonipat", "Haryana"),
     ("Yamunanagar", "Haryana"),
-    # Himachal Pradesh
     ("Bilaspur", "Himachal Pradesh"),
     ("Chamba", "Himachal Pradesh"),
     ("Dharamshala", "Himachal Pradesh"),
@@ -79,26 +75,25 @@ CITY_DATA = [
 
 PROFILE_FIELDS = {
     "Customer": [("name", "Full name"), ("phone", "Phone number")],
-    "Service Provider": [
-        ("name", "Provider name"),
-        ("service_type", "Service type (e.g. Home pickup)"),
-    ],
+    "Service Provider": [ ("name", "Provider name"),("service_type", "Service type (e.g. Home pickup)"),],
 }
-
 def ensure_accounts_table():
-    """Create the accounts table if it doesn't exist yet."""
     conn = get_connection()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS accounts (
-            username TEXT PRIMARY KEY,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL,
-            linked_id TEXT )""")
-    conn.commit()
-    conn.close()
+
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS accounts (
+                username TEXT PRIMARY KEY,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                linked_id TEXT
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
 
 def ensure_default_admin():
-    """Create the default Admin login if it isn't saved yet, so there's always a way in."""
     conn = get_connection()
     exists = conn.execute(
         "SELECT 1 FROM accounts WHERE username = ?", (DEFAULT_ADMIN_USERNAME,)
@@ -108,16 +103,12 @@ def ensure_default_admin():
         create_admin_account(DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD)
 
 def hash_password(password, salt=None):
-    """Return 'salt$hash'. Pass the stored salt to check a password."""
     if salt is None:
         salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt.encode("utf-8"), ITERATIONS
-    )
+    digest = hashlib.pbkdf2_hmac( "sha256", password.encode("utf-8"), salt.encode("utf-8"), ITERATIONS )
     return salt + "$" + digest.hex()
 
 def login(username, password):
-    """Return (role, linked_id) if the login is correct, otherwise None."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -136,7 +127,6 @@ def login(username, password):
 
 
 def get_state_city_options():
-    """Return {state: {city name: city ID}}, so the city list depends on the state."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, state FROM cities ORDER BY state, name")
@@ -146,13 +136,12 @@ def get_state_city_options():
     for city_id, name, state in rows:
         city_map = state_map.setdefault(state or "Other", {})
         label = name
-        if label in city_map:  # Same name twice in one state: add the ID to tell them apart.
+        if label in city_map:  
             label = name + " (" + str(city_id) + ")"
         city_map[label] = city_id
     return state_map
 
 def load_city_data():
-    """Add every city in CITY_DATA that isn't already saved. Returns how many were added."""
     added = 0
     conn = get_connection()
     for city_name, state in CITY_DATA:
@@ -173,7 +162,6 @@ def load_city_data():
     return added
 
 def sign_up(role, name, detail, city_id, username, password):
-    """Save the profile row and the login together. Returns (ok, message, linked_id)."""
     if role == "Customer":
         table = "users"
         profile_sql = "INSERT INTO users (id, name, phone, city) VALUES (?, ?, ?, ?)"
@@ -206,7 +194,6 @@ def sign_up(role, name, detail, city_id, username, password):
         conn.close()
 
 def create_admin_account(username, password):
-    """Save the Admin login. Used only by 'python bingo_login.py setup'."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT 1 FROM accounts WHERE username = ?", (username,))
@@ -223,7 +210,6 @@ def create_admin_account(username, password):
     return True, "Admin account created."
 
 def create_first_admin():
-    """Terminal prompt used once to create the Admin account."""
     print("Create the first Admin account.")
     username = input("Admin username: ").strip()
     password = getpass.getpass("Admin password (typing stays hidden): ")
@@ -239,7 +225,7 @@ class LoginWindow(ctk.CTk):
         self.title("BinGO | Log In")
         self.resizable(False, False)
         self.configure(fg_color=BACKGROUND)
-        self.logged_in = None  # Set to (role, linked_id) after a correct login.
+        self.logged_in = None 
         self.entries = {}
 
         self.card = ctk.CTkFrame(self, fg_color=WHITE, corner_radius=16,
@@ -254,7 +240,7 @@ class LoginWindow(ctk.CTk):
     def show_login_screen(self, notice="", notice_color=RED, username=""):
         self.geometry("420x580")
         self.clear_card()
-        ctk.CTkLabel(self.card, text="♻️ BinGO", font=("Segoe UI", 28, "bold"),
+        ctk.CTkLabel(self.card, text="♻️ BinGO", font=("Segoe UI", 30, "bold"),
                      text_color=DARK_GREEN).pack(pady=(34, 2))
         ctk.CTkLabel(self.card, text="SMART WASTE MANAGEMENT",
                      font=("Segoe UI", 10, "bold"), text_color=GREEN
@@ -366,7 +352,6 @@ class LoginWindow(ctk.CTk):
                       ).pack(side="right", fill="x", expand=True, padx=(10, 0))
 
     def build_profile_fields(self, role):
-        """Rebuild the role-specific fields when the role changes."""
         for widget in self.profile_frame.winfo_children():
             widget.destroy()
         for key, label in PROFILE_FIELDS[role]:
@@ -392,7 +377,6 @@ class LoginWindow(ctk.CTk):
         self.entries["city"].pack(fill="x")
 
     def refresh_city_menu(self, chosen_state):
-        """When the state changes, show only that state's cities."""
         cities = list(self.state_map.get(chosen_state, {}).keys())
         values = [SELECT_CITY] + cities + ([NOT_LISTED] if cities else [])
         self.entries["city"].configure(values=values)

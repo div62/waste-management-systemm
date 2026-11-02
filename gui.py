@@ -24,7 +24,7 @@ RED = "#D9534F"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "bingo.db")
 
-SELECT_TEXT = "Select..."
+SELECT_TEXT = "Select...."
 
 MODULES = {
     "User Management": ("users", ["id", "name", "phone", "city"]),
@@ -72,7 +72,6 @@ def get_connection():
 
 
 def get_count(table_name):
-    """Return the number of records in a table."""
     try:
         connection = get_connection()
         count = connection.execute('SELECT COUNT(*) FROM "' + table_name + '"').fetchone()[0]
@@ -83,16 +82,13 @@ def get_count(table_name):
 
 
 def get_rows(table_name, columns):
-    """Read the given columns from a table."""
     connection = get_connection()
     column_text = ", ".join('"' + column + '"' for column in columns)
     rows = connection.execute("SELECT " + column_text + ' FROM "' + table_name + '"').fetchall()
     connection.close()
     return rows
 
-
 def generate_id(table_name):
-    """Make the next ID for a table, such as R003 after R002."""
     prefix = ID_PREFIXES[table_name]
     connection = get_connection()
     existing_ids = connection.execute('SELECT id FROM "' + table_name + '"').fetchall()
@@ -106,9 +102,7 @@ def generate_id(table_name):
                 highest_number = int(number_part)
     return prefix + str(highest_number + 1).zfill(3)
 
-
-def get_reference_options(table_name, column):
-    """Return dropdown labels mapped to the ID stored in the database."""
+def get_reference_options(table_name, column):#Related tables se records retrieve karke dropdown options banata hai.
     reference = REFERENCE_FIELDS.get((table_name, column))
     if not reference:
         return None
@@ -123,22 +117,15 @@ def get_reference_options(table_name, column):
         for record_id, display_name in rows
     }
 
-
 def search_rows(rows, search_text):
-    """Keep the rows where any shown value contains the search text."""
     search_value = search_text.lower()
     return [
         row for row in rows
         if any(search_value in str(value).lower() for value in row if value is not None)
     ]
 
-
 def row_stripe(row_index):
-    """Alternate the background colour of table rows."""
     return "#F6FAF8" if row_index % 2 == 1 else WHITE
-
-
-# ---------- Main window ----------
 
 class BinGOApp(ctk.CTk):
     def __init__(self, role="Admin", linked_id=None):
@@ -173,13 +160,13 @@ class BinGOApp(ctk.CTk):
         menu_items = [
             ("Dashboard", "🏠"),
             ("User Management", "🚹"),
-            ("Waste Management", "🗑️"),
+            ("Waste Management","🗑️"),
             ("City Management", "🏢"),
-            ("Service Providers", "👥"),
+            ("Service Providers","👥"),
             ("Waste Collections", "🔶"),
-            ("Scheduling", "🕑"),
-            ("Requests", "🗳️"),
-            ("Billing", "🧾"),
+            ("Scheduling","🕑"),
+            ("Requests","🗳️"),
+            ("Billing","🧾"),
         ]
 
         allowed_pages = ROLE_PAGES.get(self.role)
@@ -233,7 +220,6 @@ class BinGOApp(ctk.CTk):
             widget.destroy()
 
     def add_card_hover(self, card, normal_color=WHITE, hover_color=LIGHT_GREEN):
-        """Give a card a colour and border change when the mouse moves over it."""
         def on_enter(event=None):
             try:
                 card.configure(fg_color=hover_color, border_color=GREEN, border_width=2)
@@ -266,7 +252,6 @@ class BinGOApp(ctk.CTk):
             self.show_module(page_name)
 
     def auto_refresh_dashboard(self):
-        """Refresh the dashboard every 30 seconds while it is open."""
         if not self.winfo_exists():
             return
         if self.current_page == "Dashboard":
@@ -323,7 +308,6 @@ class BinGOApp(ctk.CTk):
                 return 0
 
         def make_clickable(widget, page_name):
-            """Open a page when the card, or anything inside it, is clicked."""
             widget.bind("<Button-1>", lambda event: self.open_page(page_name))
             try:
                 widget.configure(cursor="hand2")
@@ -559,7 +543,6 @@ class BinGOApp(ctk.CTk):
 
 
     def filter_rows_for_role(self, page_name, columns, rows):
-        """Keep only the rows this login is allowed to see."""
         if self.role == "Admin":
             return rows
 
@@ -589,7 +572,6 @@ class BinGOApp(ctk.CTk):
         return rows
 
     def display_value(self, table_name, column, value):
-        """Show a friendly value. Provider cities show the name next to the ID."""
         if value is None:
             return ""
         if table_name == "providers" and column == "city_id":
@@ -658,7 +640,7 @@ class BinGOApp(ctk.CTk):
 
         if self.role == "Customer" and page_name == "Requests":
             self.add_toolbar_button(
-                toolbar, "➕ New Request", 140, DARK_GREEN, GREEN, self.open_new_request_form)
+                toolbar, "📥 New Request", 140, DARK_GREEN, GREEN, self.open_new_request_form)
 
         if self.role == "Service Provider" and page_name == "Requests":
             self.add_toolbar_button(
@@ -686,7 +668,7 @@ class BinGOApp(ctk.CTk):
         if search_text:
             rows = search_rows(rows, search_text)
 
-        for column_index, column_name in enumerate(columns):
+        for column_index, column_name in enumerate(columns):#Loop mein index aur value dono lena.
             table_frame.grid_columnconfigure(column_index, weight=1, uniform="table")
             ctk.CTkLabel(
                 table_frame, text=column_name.replace("_", " ").title(),

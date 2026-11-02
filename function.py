@@ -1,8 +1,6 @@
-
 from database import connect_db, create_tables
 create_tables()
-def fetch_one(sql, params=()):
-
+def fetch_one(sql, params=()):                                                           
     conn = connect_db()
     try:
         return conn.execute(sql, params).fetchone()
@@ -39,7 +37,7 @@ def generate_id(table_name, prefix):
 
 
 def ask_optional(label, current):
-    text = input("Enter new " + label + " [" + str(current) + "]: ").strip()
+    text = input("Enter new " + label + " [" + str(current) + "]: ").strip()#starting aur ending spaces remove karta hai.
     return text if text else current
 
 
@@ -71,7 +69,6 @@ def ask_optional_number(label, current):
             print("Please enter a number greater than 0.")
             continue
         return value
-# user
 def show_user(user):
     print("User ID:", user[0])
     print("Name:", user[1])

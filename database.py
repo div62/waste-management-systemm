@@ -16,7 +16,7 @@ def create_tables():
             city TEXT)""")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS waste_types (
-            id TEXT PRIMARY KEY,
+            id TEXT PRIMARY KEY,#A column that uniquely identifies each record.
             name TEXT,
             category TEXT,
             description TEXT)""")
