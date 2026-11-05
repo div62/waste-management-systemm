@@ -1,5 +1,5 @@
-                                                           # BinGO 
-                                                # Smart Waste Management System
+  # BinGO 
+  # Smart Waste Management System
 
 BinGO is a desktop app for keeping track of waste collection. Customers ask for a pickup, service providers take the requests in their city, and the admin can see and manage everything from one place. It's written in Python with a CustomTkinter interface and keeps all its data in a local SQLite file, so there's no server to set up.
 
