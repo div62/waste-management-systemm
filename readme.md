@@ -57,11 +57,11 @@ The interface uses the Segoe UI font, so it looks best on Windows.
 
 ```
 waste-management-systemm/
-├── bingo_login.py   # start here: login, sign-up, admin setup
-├── gui.py           # main window, dashboard, charts, tables and forms
-├── database.py      # creates the tables in bingo.db
-├── function.py      # terminal version of the record operations
-└── bingo.db         # SQLite database
+├── bingo_login.py  
+├── gui.py          
+├── database.py      
+├── function.py      
+└── bingo.db         
 ```
 
 ## Database
@@ -93,9 +93,9 @@ pip install customtkinter matplotlib
 Then, from the project folder, run these in order:
 
 ```
-python database.py                  # creates the tables
-python bingo_login.py load_cities   # adds the cities for Punjab, Chandigarh, Haryana and Himachal Pradesh
-python bingo_login.py               # opens the app
+python database.py                  
+python bingo_login.py load_cities   
+python bingo_login.py               
 ```
 
 `load_cities` only adds cities that aren't already in the database, so it's safe to run again.
@@ -137,5 +137,4 @@ These are things I'd like to build when I get the time. Some are small and some 
 - We can build a web version or a phone app, so customers don't have to install anything.
 
 ## Author
-
-Built by Divyansha Sharma [div62](https://github.com/div62) and Eshmeet kaur [Eshmeetk](https://github.com/eshmeetk) as a college project.
+Built by Divyansha Sharma [div62](https://github.com/div62) 
